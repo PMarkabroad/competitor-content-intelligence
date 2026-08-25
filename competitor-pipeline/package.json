@@ -13,7 +13,8 @@
     "smoke-test": "tsx scripts/smoke_test.ts",
     "harvest-posts": "tsx scripts/harvest_posts.ts",
     "flag-low-median": "tsx scripts/flag_low_median_accounts.ts",
-    "report-deciles": "tsx scripts/report_deciles.ts"
+    "report-deciles": "tsx scripts/report_deciles.ts",
+    "discover": "tsx scripts/discover.ts"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.45.0",

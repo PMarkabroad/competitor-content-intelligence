@@ -71,6 +71,49 @@ export const config = {
    */
   SCOREABLE_TIERS: ["T2", "T3"] as const,
 
+  /**
+   * Discovery pass (migration 008, scripts/discover.ts). TikTok is the
+   * primary discovery and hook-corpus platform: native keyword search,
+   * every post is video with a view count, no carousel problem. All three
+   * failures that broke the original T3 Instagram roster -- pinned posts
+   * producing false-dormancy reads, private accounts invisible until
+   * scrape time, carousel-only accounts structurally unable to produce
+   * vpf -- are Instagram-specific. T1 AU stays on Instagram: it's read for
+   * positioning/offers/objection language, not scored for performance.
+   */
+  DISCOVERY_PLATFORM: "tiktok" as const,
+
+  /**
+   * Hard gates applied in the --gate stage of discover.ts. Fail any one
+   * and the candidate is discarded (gate_result='fail', gate_fail_reason
+   * names which one, so it's possible to tell whether the roster is
+   * failing on dormancy, size, or content type). minMedianVpf reuses
+   * FOLLOWER_BANDS above rather than duplicating a separate threshold --
+   * a candidate is held to the same bar an account already in the roster
+   * would be.
+   */
+  DISCOVERY_GATES: {
+    minVideoPosts90d: 8,
+    minFollowers: 1_000,
+    maxDaysSinceLastPost: 30,
+    validMarkets: ["AU", "CA", "US"] as const,
+  },
+
+  /**
+   * Volume controls, both directly load-bearing for discovery cost -- see
+   * the worked estimate in migration 008 / discover.ts's header comment.
+   * SEARCH_RESULTS_PER_QUERY is clockworks/tiktok-scraper's resultsPerPage
+   * applied to the --search stage (videos+profiles per seed query).
+   * GATE_MAX_POSTS_PER_CANDIDATE is the same field applied per-candidate
+   * in the --gate stage -- the expensive stage, since cost there is
+   * candidates x posts-per-candidate, not just candidates. minVideoPosts90d
+   * above requires 8 in-window video posts to pass, so this cap needs
+   * enough margin over 8 to actually see whether an account clears it,
+   * without pulling far more than needed.
+   */
+  DISCOVERY_SEARCH_RESULTS_PER_QUERY: 10,
+  DISCOVERY_GATE_MAX_POSTS_PER_CANDIDATE: 10,
+
   /** Trailing window used to compute each competitor's baseline median vpf. */
   BASELINE_WINDOW_DAYS: 90,
 
@@ -120,10 +163,38 @@ export const config = {
    *     estimated 1-5 outlier reels/month across the full roster,
    *     ~60-120s each: roughly $0.08-$0.50/mo.
    *   Combined estimate: ~$0.85-1.25/mo typical, up to ~$2.5/mo if posting
-   *   volume or outlier count runs high. $4 leaves real headroom above
-   *   that while still catching a genuine runaway before Apify's own wall.
+   *   volume or outlier count runs high.
+   *
+   * Raised to $12 to cover a full discovery sweep (migration 008,
+   * discover.ts), calculated from real clockworks/tiktok-scraper and
+   * clockworks/tiktok-profile-scraper pricing (confirmed via the Apify API
+   * on 2026-08-26), not guessed:
+   *   --search:  45 seed queries (15/market x AU/CA/US) x
+   *              DISCOVERY_SEARCH_RESULTS_PER_QUERY (10) results
+   *              = 450 results x $0.0037/result (tiktok-scraper, FREE
+   *              tier) = ~$1.67
+   *   --profile: ~180 unique candidates estimated after dedup (60/market)
+   *              x $0.003/result (tiktok-profile-scraper) = ~$0.54
+   *   --gate:    180 candidates x DISCOVERY_GATE_MAX_POSTS_PER_CANDIDATE
+   *              (10) x $0.0037/result (tiktok-scraper) = ~$6.66 -- this
+   *              is where the money goes, because cost here is
+   *              candidates x posts-per-candidate, not just candidates
+   *   Full-sweep total: ~$1.67 + $0.54 + $6.66 = ~$8.87. $12 leaves
+   *   headroom above that estimate for candidate-count variance.
+   *
+   * IMPORTANT: this is well above what the account can actually spend
+   * right now. The Apify account is still on the FREE plan with a real
+   * $5/month platform ceiling (confirmed via GET /v2/users/me on
+   * 2026-08-26: tier FREE, maxMonthlyUsageUsd 5), and $0.66 of that is
+   * already spent this cycle -- about $4.34 of real headroom left. A full
+   * 3-market discovery sweep (~$8.87) cannot complete on this plan; even a
+   * single-market run (--limit, ~$3) would nearly exhaust the remaining
+   * cycle. Raising this config value does NOT raise Apify's own limit --
+   * either upgrade the Apify plan before running a full sweep, or use
+   * --limit to scope discover.ts to one market at a time and stay inside
+   * the current plan.
    */
-  MONTHLY_APIFY_SPEND_CAP_USD: 4,
+  MONTHLY_APIFY_SPEND_CAP_USD: 12,
 
   /**
    * Per-item cost estimates used only for the spend-guard check, not
