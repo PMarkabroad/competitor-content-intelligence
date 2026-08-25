@@ -1,0 +1,7 @@
+# 6-8 accounts per market. Selected on audience overlap, not follower count.
+accounts:
+  # - handle: example_handle
+  #   platform: instagram
+  #   market: AU
+  #   tier: 1
+  #   rationale: "Melbourne-based, migrant career coaching, same ICP"

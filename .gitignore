@@ -1,0 +1,14 @@
+.env
+__pycache__/
+*.pyc
+.venv/
+data/
+
+# competitor-pipeline (TypeScript)
+competitor-pipeline/node_modules/
+competitor-pipeline/dist/
+competitor-pipeline/logs/*.log
+competitor-pipeline/out/
+
+# Supabase CLI local cache (project ref, pooler URL, DB host -- infra metadata, not source)
+supabase/.temp/

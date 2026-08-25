@@ -1,0 +1,26 @@
+{
+  "profile": {
+    "actorId": "apify/instagram-profile-scraper",
+    "build": "0.0.587",
+    "pinnedAt": "2026-08-25",
+    "verifiedVia": "GET https://api.apify.com/v2/acts/apify~instagram-profile-scraper -- confirmed this exact build (buildNumberInt 587) is the actor's own 'latest' tag as of pin date",
+    "input": { "usernames": ["<handle>"] },
+    "_comment": "Fetches a single account's profile snapshot: follower count, following count, post count, bio, plus up to 12 latest posts. Output maps to competitor_snapshots (followersCount, followsCount, postsCount, biography). Already used ad-hoc this session for the verification worksheet (out/verification_worksheet.csv, source_actor column) -- 133K+ users on the actor, official apify/ namespace. Every call MUST pass build=0.0.587 explicitly (via the API's `build` query param), never rely on the actor's own 'latest' tag, which will silently drift to a newer build over time."
+  },
+  "posts": {
+    "actorId": "apify/instagram-post-scraper",
+    "build": "0.0.579",
+    "pinnedAt": "2026-08-25",
+    "verifiedVia": "GET https://api.apify.com/v2/acts/apify~instagram-post-scraper -- confirmed this exact build (buildNumberInt 579) is the actor's own 'latest' tag as of pin date",
+    "input": { "username": ["<handle>"], "resultsLimit": 20, "onlyPostsNewerThan": "<since-date-or-relative>", "dataDetailLevel": "detailedData" },
+    "_comment": "Fetches recent posts for an account: caption, timestamp, likesCount, commentsCount, videoViewCount/type, across all post types (image/carousel/video), not reels-only. resultsLimit maps to posts_per_run; onlyPostsNewerThan maps to the last_scraped_at watermark in build_run_input.ts. dataDetailLevel MUST be detailedData -- confirmed via smoke_test.ts on 2026-08-25 that basicData omits video view count entirely (no videoViewCount/videoPlayCount field at all, even for Video/clips posts), which makes vpf permanently null. detailedData is a paid add-on (~$0.001/post extra on top of ~$0.0017/post base), trivial at this pipeline's scale. Every call MUST pass build=0.0.579 explicitly, never 'latest'."
+  },
+  "transcript": {
+    "actorId": "apify/instagram-reel-scraper",
+    "build": "0.0.549",
+    "pinnedAt": "2026-08-25",
+    "verifiedVia": "GET https://api.apify.com/v2/acts/apify~instagram-reel-scraper -- confirmed this exact build (buildNumberInt 549) is the actor's own 'latest' tag as of pin date",
+    "input": { "username": ["<reel-post-url>"], "includeTranscript": true },
+    "_comment": "Reel-specific actor (136K+ users, official apify/ namespace) with an includeTranscript add-on flag, billed per minute of audio -- only ever called with includeTranscript:true against a single post URL at a time, and only for posts already in v_outliers, never a batch scrape. Only applicable to video/reel posts -- an outlier that's a carousel or static image has no audio to transcribe and can't use this actor; that's a real scope gap (v_outliers doesn't currently distinguish post_type), flag before wiring ingest for transcripts. Output field names for the transcript itself (transcript text + timing) were not yet confirmed against a real response as of pinning -- ingest.ts's ingestTranscript() falls back across item.transcript / item.captionText defensively, but this should be confirmed against one real call before trusting it at volume. Every call MUST pass build=0.0.549 explicitly, never 'latest'."
+  }
+}

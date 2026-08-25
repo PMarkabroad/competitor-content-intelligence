@@ -1,0 +1,42 @@
+version: v1
+
+topic_slugs:
+  - resume-not-working
+  - no-callbacks
+  - no-local-experience
+  - volume-no-results
+  - linkedin-networking
+  - interview-performance
+  - visa-time-pressure
+  - visa-pr-blocker
+  - other
+
+hook_types:
+  - contrarian_inversion
+  - cost_accounting
+  - empathy_pivot
+  - subdivision_teaching
+  - direct_question
+  - story_open
+  - list_promise
+  - credential_flex
+  - other
+
+formats:
+  - talking_head
+  - text_overlay
+  - carousel
+  - walk_and_talk
+  - screen_recording
+  - green_screen
+  - static_graphic
+  - other
+
+cta_types:
+  - none
+  - comment_keyword
+  - dm_keyword
+  - link_in_bio
+  - follow
+  - save_share
+  - book_call

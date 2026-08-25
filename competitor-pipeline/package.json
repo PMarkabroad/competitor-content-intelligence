@@ -1,0 +1,30 @@
+{
+  "name": "competitor-pipeline",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "load-registry": "tsx scripts/load_registry.ts",
+    "build-run-input": "tsx scripts/build_run_input.ts",
+    "ingest": "tsx scripts/ingest.ts",
+    "verification-worksheet": "tsx scripts/verification_worksheet.ts",
+    "apply-worksheet": "tsx scripts/apply_worksheet.ts",
+    "inspect-legacy": "tsx scripts/inspect_legacy.ts",
+    "preflight": "tsx scripts/preflight.ts",
+    "smoke-test": "tsx scripts/smoke_test.ts",
+    "harvest-posts": "tsx scripts/harvest_posts.ts",
+    "flag-low-median": "tsx scripts/flag_low_median_accounts.ts",
+    "report-deciles": "tsx scripts/report_deciles.ts"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.45.0",
+    "csv-parse": "^5.5.6",
+    "dotenv": "^16.4.5",
+    "ws": "^8.21.3"
+  },
+  "devDependencies": {
+    "@types/node": "^20.14.0",
+    "@types/ws": "^8.18.1",
+    "tsx": "^4.16.0",
+    "typescript": "^5.5.0"
+  }
+}
