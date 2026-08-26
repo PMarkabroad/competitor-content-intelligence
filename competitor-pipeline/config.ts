@@ -249,19 +249,21 @@ export const config = {
    * run). Search $1.67 + profile $0.54 + gate $3.33 = ~$5.54 total, down
    * from the original ~$8.87 estimate for the same R=10 breadth.
    *
-   * IMPORTANT: this is well above what the account can actually spend
-   * right now. The Apify account is still on the FREE plan with a real
-   * $5/month platform ceiling (confirmed via GET /v2/users/me on
-   * 2026-08-26: tier FREE, maxMonthlyUsageUsd 5), and $0.66 of that is
-   * already spent this cycle -- about $4.34 of real headroom left. A full
-   * 3-market sweep at R=25 (~$11.26) cannot complete on this plan. A
-   * single-market run (--limit=AU, R=25) is estimated at ~$3.75 --
-   * fits inside the remaining cycle, but tightly. Raising this config
-   * value does NOT raise Apify's own limit -- either upgrade the Apify
-   * plan before running a full sweep, or use --limit to scope discover.ts
-   * to one market at a time and stay inside the current plan.
+   * IMPORTANT: the account switched from personal to an organizational
+   * Apify account on 2026-08-26 -- still FREE tier, still a real $5/month
+   * platform ceiling (confirmed via GET /v2/users/me against the org
+   * account: tier FREE, maxMonthlyUsageUsd 5). The org switch did not
+   * raise the real ceiling. Reverted this value to $4 (a notch below $5,
+   * same reasoning as the original $4 -- this guard should fire first
+   * with a clear error, not Apify's own platform wall failing a run
+   * abruptly mid-harvest) after a brief excursion to $12 that assumed a
+   * higher-tier plan which never materialized. A full 3-market discovery
+   * sweep (~$11.26 estimated) and even a single-market one (~$3.75)
+   * cannot complete in one cycle at this cap -- work in smaller batches
+   * (--limit, --sample) and expect to spread a full sweep across cycles,
+   * or upgrade the Apify plan and raise this deliberately.
    */
-  MONTHLY_APIFY_SPEND_CAP_USD: 12,
+  MONTHLY_APIFY_SPEND_CAP_USD: 4,
 
   /**
    * Per-item cost estimates used only for the spend-guard check, not
