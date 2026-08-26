@@ -2,7 +2,11 @@
 __pycache__/
 *.pyc
 .venv/
-data/
+# Root-anchored (was a bare "data/" -- matched any directory named "data"
+# at any depth, which silently swallowed the dashboard's app/(app)/data/
+# route folder. This was always meant to be the top-level Python scaffold
+# data directory, not a generic pattern.
+/data/
 
 # competitor-pipeline (TypeScript)
 competitor-pipeline/node_modules/
