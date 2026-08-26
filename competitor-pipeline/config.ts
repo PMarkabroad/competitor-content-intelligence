@@ -61,6 +61,43 @@ export const config = {
   ] as const,
 
   /**
+   * TikTok-specific bands for scripts/discover.ts, separate from
+   * FOLLOWER_BANDS above (which stays Instagram-only, unchanged, and is
+   * also baked directly into v_outliers's SQL -- migration 007).
+   *
+   * The AU discovery sweep (2026-08-26) showed FOLLOWER_BANDS's floors are
+   * essentially a no-op on TikTok: 46 of 49 gated candidates with a
+   * non-null median (94%) cleared their band's floor, most by 10-75x
+   * margin. TikTok view counts include passive feed-scroll impressions
+   * that Instagram's algorithm doesn't surface the same way, so vpf runs
+   * far higher across the board -- Instagram's floors, calibrated from
+   * Instagram data, don't transfer.
+   *
+   * Derivation: each band's floor is set at that band's own median vpf
+   * from the 50-candidate real distribution (values below, computed
+   * 2026-08-26), not an arbitrary multiple of the Instagram floor --
+   *   small (n=30, <10k followers): median vpf ~0.477 -> floor 0.40
+   *     (just under the median, filters ~half of the small-band pool)
+   *   mid (n=17, 10k-250k followers): median vpf ~0.070 -> floor 0.07
+   *     (matches the observed median almost exactly)
+   *   large (n=2, >=250k followers): only 2 data points (0.062, 0.122) --
+   *     too thin to derive a real floor with confidence. Proposing 0.03
+   *     (~6x the Instagram large floor, a conservative order-of-magnitude
+   *     scale-up rather than a data-fitted number) and flagging this for
+   *     revisit once more large-follower TikTok candidates are gated.
+   *
+   * Note this fixes a broken GATE, not the shortlist's relevance problem
+   * -- a p50-ish floor still lets through roughly half the pool by
+   * definition, lifestyle vloggers included. Relevance is --classify's
+   * job (see stageClassify in discover.ts), not this floor's.
+   */
+  DISCOVERY_FOLLOWER_BANDS: [
+    { name: "small", maxFollowers: 10_000, minMedianVpf: 0.40 },
+    { name: "mid", maxFollowers: 250_000, minMedianVpf: 0.07 },
+    { name: "large", maxFollowers: Infinity, minMedianVpf: 0.03 },
+  ] as const,
+
+  /**
    * Tiers eligible for v_competitor_baseline / v_outliers at all (migration
    * 005). T1 is deliberately excluded: it's a positioning/offer read, a
    * quarterly human review, not a hook corpus -- and T1 accounts post

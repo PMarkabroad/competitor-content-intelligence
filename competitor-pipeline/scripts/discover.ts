@@ -6,27 +6,38 @@
  * assembled (niche/name first, behaviour discovered later, at cost, one
  * account at a time).
  *
- * Five independently-runnable stages, each behind its own flag:
- *   --search   run seed queries through the TikTok search actor, extract
- *              unique candidate handles, insert into discovery_candidates
- *   --profile  profile-scrape every candidate with a null followers value
- *   --gate     pull ~90 days of posts per candidate, compute
- *              video_posts_90d / median_vpf_90d, resolve band, apply the
- *              hard gates in config.ts. The expensive stage.
+ * Six independently-runnable stages, run IN ORDER, each behind its own flag:
+ *   --search    run seed queries through the TikTok search actor, extract
+ *               unique candidate handles, insert into discovery_candidates
+ *   --profile   cheap gates only: followers, is_private (author-level
+ *               metadata). Also pulls 3 recent captions for --classify.
+ *   --classify  THE relevance gate (added after the AU sweep showed only
+ *               6 of 37 behaviorally-healthy candidates were genuine
+ *               career coaches -- 21 were lifestyle vloggers a behavioral
+ *               gate structurally cannot filter). Anthropic API, not
+ *               keyword matching. Hard-excludes 'regulated' (visa/
+ *               migration-agent accounts) and 'irrelevant'. No Apify cost.
+ *   --gate      expensive gates: video_posts_90d, median_vpf_90d,
+ *               last_post_at. Only runs on candidates --classify approved
+ *               (career_coach/adjacent). The expensive Apify stage.
  *   --shortlist  write out/discovery_shortlist.csv for the human pass
- *   --promote  read the completed shortlist back, insert approved rows
- *              into `competitors` (never automatic)
+ *   --promote   read the completed shortlist back, insert approved rows
+ *               into `competitors` (never automatic). Refuses any row
+ *               classified 'regulated' (also enforced at the DB level,
+ *               migration 009 -- this is defense in depth, not the lock).
  *
- * Every stage prints an estimated cost and requires --confirm to actually
- * call Apify. --limit=<market> scopes --search/--gate to one market.
- * --sample=<N> (--gate only) randomly samples N candidates from the
- * eligible pool instead of gating all of them -- for a budget-capped run,
- * gives an unbiased read on the true pass rate rather than skewing toward
- * whatever an arbitrary ordering (e.g. by followers) would favor.
+ * Every stage that calls Apify prints an estimated cost and requires
+ * --confirm to proceed; --classify calls only the Anthropic API and has no
+ * such gate. --limit=<market> scopes --search/--classify/--gate to one
+ * market. --sample=<N> (--gate only) randomly samples N candidates from
+ * the eligible pool instead of gating all of them -- for a budget-capped
+ * run, gives an unbiased read on the true pass rate rather than skewing
+ * toward whatever an arbitrary ordering (e.g. by followers) would favor.
  *
  * Usage:
  *   npm run discover -- --search --confirm [--limit=AU]
  *   npm run discover -- --profile --confirm
+ *   npm run discover -- --classify [--limit=AU]
  *   npm run discover -- --gate --confirm [--limit=AU] [--sample=55]
  *   npm run discover -- --shortlist
  *   npm run discover -- --promote --file out/discovery_shortlist.csv
@@ -62,7 +73,13 @@ function loadActors(): ActorsConfig {
 
 function loadSeedQueries(): Record<Market, string[]> {
   const raw = JSON.parse(readFileSync(SEED_QUERIES_PATH, "utf-8"));
-  const { _comment, ...markets } = raw;
+  // Strip every underscore-prefixed key (_comment, _comment_AU, ...), not
+  // just the literal "_comment" -- a market-specific comment key here
+  // would otherwise leak into `markets` and be iterated as if it were a
+  // fourth market.
+  const markets = Object.fromEntries(
+    Object.entries(raw).filter(([key]) => !key.startsWith("_"))
+  );
   return markets as Record<Market, string[]>;
 }
 
@@ -86,11 +103,15 @@ async function runApifyActor(
   return (await res.json()) as Record<string, unknown>[];
 }
 
+// Uses DISCOVERY_FOLLOWER_BANDS (TikTok-calibrated), not FOLLOWER_BANDS
+// (Instagram-only, used by the real harvest pipeline and baked into
+// v_outliers's SQL) -- see config.ts's comment on DISCOVERY_FOLLOWER_BANDS
+// for why one set of floors can't serve both platforms.
 function resolveBand(followers: number) {
-  for (const band of config.FOLLOWER_BANDS) {
+  for (const band of config.DISCOVERY_FOLLOWER_BANDS) {
     if (followers < band.maxFollowers) return band;
   }
-  return config.FOLLOWER_BANDS[config.FOLLOWER_BANDS.length - 1];
+  return config.DISCOVERY_FOLLOWER_BANDS[config.DISCOVERY_FOLLOWER_BANDS.length - 1];
 }
 
 function parseArgs() {
@@ -99,6 +120,7 @@ function parseArgs() {
   return {
     search: args.includes("--search"),
     profile: args.includes("--profile"),
+    classify: args.includes("--classify"),
     gate: args.includes("--gate"),
     shortlist: args.includes("--shortlist"),
     promote: args.includes("--promote"),
@@ -205,10 +227,14 @@ async function stageSearch(apifyToken: string, limit: Market | undefined, confir
 // that pull instead. followers/is_private are unaffected by pinning
 // (author-level metadata, not post-level) and stay gated here.
 //
-// resultsPerPage MUST still be 1. The tiktok-profile-scraper actor's
-// default is 100 posts/profile (it's a profile+videos scraper, not a
-// profile-only lookup) -- leaving it unset would have made this "cheap"
-// stage cost ~100x more than intended. Field names below are confirmed
+// resultsPerPage is 3, not 1: --classify (the next stage) needs bio + 3
+// recent captions per candidate, and this is the cheap stage that already
+// pulls author-level data -- 3 items instead of 1 is still ~33x cheaper
+// than --gate's resultsPerPage=10. Captions from these 3 items are almost
+// certainly pinned-contaminated for RECENCY purposes (same issue as
+// last_post_at, see the header comment above) -- irrelevant for
+// classification, which only needs representative content samples, not
+// the most-recent ones specifically. Field names below are confirmed
 // against a real response (2026-08-26 AU run), not guessed.
 
 async function stageProfile(apifyToken: string, confirmed: boolean) {
@@ -225,29 +251,43 @@ async function stageProfile(apifyToken: string, confirmed: boolean) {
     return;
   }
 
-  const estimateUsd = Math.max(0.01, pending.length * 1 * 0.003 + 0.001);
+  const PROFILE_RESULTS_PER_PAGE = 3;
+  const estimateUsd = Math.max(0.01, pending.length * PROFILE_RESULTS_PER_PAGE * 0.003 + 0.001);
   if (!costGate("profile", estimateUsd, confirmed)) return;
 
   const items = await runApifyActor(
     actors.tiktokProfile,
-    { profiles: pending.map((p) => p.handle), profileScrapeSections: ["videos"], resultsPerPage: 1 },
+    { profiles: pending.map((p) => p.handle), profileScrapeSections: ["videos"], resultsPerPage: PROFILE_RESULTS_PER_PAGE },
     apifyToken
   );
   console.log(`Profile stage returned ${items.length} item(s).`);
+
+  const itemsByHandle = new Map<string, Record<string, unknown>[]>();
+  for (const item of items) {
+    const author = (item.authorMeta ?? item.author ?? {}) as Record<string, unknown>;
+    const handle = String(author.name ?? author.uniqueId ?? item.uniqueId ?? "");
+    if (!handle) continue;
+    if (!itemsByHandle.has(handle)) itemsByHandle.set(handle, []);
+    itemsByHandle.get(handle)!.push(item);
+  }
 
   const byHandle = new Map<string, string>(pending.map((p) => [p.handle, p.candidate_id]));
   const gates = config.DISCOVERY_GATES;
 
   let updated = 0;
   let cheapFailed = 0;
-  for (const item of items) {
+  for (const [handle, handleItems] of itemsByHandle.entries()) {
+    const item = handleItems[0]; // author-level fields are identical across a handle's items
     const author = (item.authorMeta ?? item.author ?? {}) as Record<string, unknown>;
-    const handle = String(author.name ?? author.uniqueId ?? item.uniqueId ?? "");
     const candidateId = byHandle.get(handle);
     if (!candidateId) continue;
 
     const followers = Number(author.fans ?? author.followerCount ?? item.fans ?? 0) || null;
     const isPrivate = Boolean(author.privateAccount ?? author.isPrivate ?? item.privateAccount ?? false);
+    const recentCaptions = handleItems
+      .map((i) => String(i.text ?? ""))
+      .filter((t) => t.length > 0)
+      .slice(0, 3);
 
     const failReasons: string[] = [];
     if (followers === null || followers < gates.minFollowers) {
@@ -266,6 +306,7 @@ async function stageProfile(apifyToken: string, confirmed: boolean) {
         followers,
         bio: author.signature ?? item.signature ?? null,
         is_private: isPrivate,
+        recent_captions: recentCaptions,
         // Only write a terminal gate_result here on failure -- passing
         // candidates stay gate_result=null so --gate's `is('gate_result',
         // null)` filter picks them up for the expensive post pull. Writing
@@ -280,11 +321,163 @@ async function stageProfile(apifyToken: string, confirmed: boolean) {
   console.log(`Updated ${updated} candidate(s). ${cheapFailed} failed a cheap gate (followers/private) and will not proceed to --gate.`);
 }
 
+// --- --classify (relevance gate, runs BEFORE --gate) ----------------------
+//
+// The real fix from the AU sweep: behavioral gates (follower count,
+// posting frequency, vpf) cannot distinguish a career coach from an
+// expat-lifestyle vlogger who happens to post about "life in Australia" --
+// that difference is semantic. Only 6 of 37 candidates that cleared every
+// behavioral gate were genuine career/job-search accounts; 21 were
+// generic lifestyle creators caught by broad keyword matching, and 2
+// (nazanin.migration, pathwaytoaus) were migration agents that must never
+// be promoted regardless of performance (see migration 009's hard
+// DB-level constraint -- this classification feeds that lock, it doesn't
+// replace it).
+//
+// Runs against every candidate that passed --profile's cheap gates
+// (gate_result is null) and hasn't been classified yet. Uses the
+// Anthropic API, not keyword matching -- the whole point is that this is
+// a semantic judgment call, and this pipeline already learned once this
+// session (the pinned-post bug) that a cheap heuristic can look right and
+// be systematically wrong. Only career_coach and adjacent proceed to
+// --gate; irrelevant and regulated get a terminal gate_result='fail' here
+// and never reach the expensive post pull.
+//
+// No Apify cost at all -- this stage only calls the Anthropic API.
+
+const CLASSIFY_BATCH_SIZE = 20;
+
+async function classifyBatch(
+  anthropic: InstanceType<typeof import("@anthropic-ai/sdk").default>,
+  candidates: { candidate_id: string; handle: string; bio: string | null; recent_captions: string[] | null }[]
+): Promise<Map<string, { classification: string; reason: string }>> {
+  const system = `You classify TikTok accounts for a competitor-intelligence pipeline built for an Australian career-coaching business (Ark Abroad) that helps internationally-trained professionals and migrants land corporate jobs in AU/US/CA.
+
+Classify each account into exactly one of:
+- "career_coach": the account's primary content is career coaching, job-search advice, resume/interview/LinkedIn help, or similar professional-development coaching aimed at job seekers.
+- "adjacent": related but not core career coaching -- e.g. a study-abroad or settlement-services org, a niche professional-skills trainer, a recruiter, or similar. Worth a human's second look, not an automatic yes.
+- "irrelevant": general lifestyle, travel, entertainment, fitness, or personal-diary content that happens to mention living/working abroad, but is not meaningfully about career coaching or job search.
+- "regulated": the account's bio or content centres on visa, permanent residency, migration, or sponsorship advice (e.g. a registered migration agent, a "visa expert" service). This applies regardless of how good the account's other content is -- these must be hard-excluded.
+
+Respond with ONLY a JSON array, no markdown fences, no preamble: [{"handle": "...", "classification": "career_coach|adjacent|irrelevant|regulated", "reason": "one short sentence"}, ...] -- one object per account, in the order given.`;
+
+  const userContent = candidates
+    .map(
+      (c, i) =>
+        `${i + 1}. handle: ${c.handle}\nbio: ${c.bio ?? "(none)"}\nrecent captions: ${(c.recent_captions ?? []).map((cap) => `"${cap.slice(0, 200)}"`).join(" | ") || "(none)"}`
+    )
+    .join("\n\n");
+
+  const response = await anthropic.messages.create({
+    model: "claude-opus-5",
+    max_tokens: 4000,
+    output_config: { effort: "low" },
+    system,
+    messages: [{ role: "user", content: userContent }],
+  });
+
+  const textBlock = response.content.find((b) => b.type === "text");
+  if (!textBlock || textBlock.type !== "text") {
+    throw new Error("Classify response had no text block.");
+  }
+
+  let parsed: { handle: string; classification: string; reason: string }[];
+  try {
+    parsed = JSON.parse(textBlock.text);
+  } catch (err) {
+    throw new Error(`Failed to parse classify response as JSON: ${textBlock.text.slice(0, 500)}`);
+  }
+
+  const validClassifications = new Set(["career_coach", "adjacent", "irrelevant", "regulated"]);
+  const result = new Map<string, { classification: string; reason: string }>();
+  for (const row of parsed) {
+    if (!validClassifications.has(row.classification)) {
+      throw new Error(`Out-of-vocabulary classification "${row.classification}" for ${row.handle}`);
+    }
+    result.set(row.handle, { classification: row.classification, reason: row.reason });
+  }
+  return result;
+}
+
+async function stageClassify(limit: Market | undefined) {
+  const anthropicApiKey = process.env.ANTHROPIC_API_KEY;
+  if (!anthropicApiKey) throw new Error("ANTHROPIC_API_KEY must be set (see .env.example).");
+
+  const { default: Anthropic } = await import("@anthropic-ai/sdk");
+  const anthropic = new Anthropic({ apiKey: anthropicApiKey });
+  const supabase = getSupabaseClient();
+
+  let query = supabase
+    .from("discovery_candidates")
+    .select("candidate_id, handle, bio, recent_captions")
+    .is("gate_result", null) // passed --profile's cheap gates
+    .is("classification", null) // not yet classified
+    .not("followers", "is", null);
+
+  if (limit) query = query.eq("market_guess", limit);
+
+  const { data: pending, error } = await query;
+  if (error) throw new Error(`Failed to read discovery_candidates: ${error.message}`);
+  if (!pending || pending.length === 0) {
+    console.log("No candidates need classification.");
+    return;
+  }
+
+  console.log(`Classifying ${pending.length} candidate(s) in batches of ${CLASSIFY_BATCH_SIZE} (Anthropic API, no Apify cost)...`);
+
+  let classified = 0;
+  let excluded = 0;
+  for (let i = 0; i < pending.length; i += CLASSIFY_BATCH_SIZE) {
+    const batch = pending.slice(i, i + CLASSIFY_BATCH_SIZE);
+    let results: Map<string, { classification: string; reason: string }>;
+    try {
+      results = await classifyBatch(anthropic, batch);
+    } catch (err) {
+      console.error(`Batch starting at ${i} failed: ${err instanceof Error ? err.message : String(err)}. Retrying once.`);
+      try {
+        results = await classifyBatch(anthropic, batch);
+      } catch (retryErr) {
+        console.error(`Retry also failed, skipping this batch: ${retryErr instanceof Error ? retryErr.message : String(retryErr)}`);
+        continue;
+      }
+    }
+
+    for (const c of batch) {
+      const r = results.get(c.handle);
+      if (!r) {
+        console.error(`No classification returned for ${c.handle}, skipping.`);
+        continue;
+      }
+      const excludeFromGate = r.classification === "irrelevant" || r.classification === "regulated";
+      if (excludeFromGate) excluded += 1;
+
+      const { error: updateError } = await supabase
+        .from("discovery_candidates")
+        .update({
+          classification: r.classification,
+          classification_reason: r.reason,
+          gate_result: excludeFromGate ? "fail" : null,
+          gate_fail_reason: excludeFromGate ? `classification=${r.classification}: ${r.reason}` : null,
+        })
+        .eq("candidate_id", c.candidate_id);
+      if (!updateError) classified += 1;
+    }
+  }
+
+  console.log(`Classified ${classified} candidate(s). ${excluded} excluded (irrelevant/regulated) and will not proceed to --gate.`);
+}
+
 // --- --gate (expensive gates: video_posts_90d, median_vpf_90d) -----------
 //
 // Only ever runs against candidates that already passed --profile's cheap
-// gates (followers, is_private) -- gate_result stays null for a passing
-// --profile candidate specifically so this query picks them up.
+// gates AND --classify's relevance gate (classification in career_coach/
+// adjacent) -- gate_result stays null for a candidate passing both, so
+// this query requires classification to be explicitly set to one of the
+// two approved values, not just gate_result is null. This enforces the
+// stage order (search -> profile -> cheap gates -> classify -> gate): a
+// candidate that hasn't been classified yet (classification still null)
+// does NOT reach the expensive post pull, even if it happens to have
+// gate_result=null from --profile.
 // followers/is_private are NOT re-checked here -- --profile already
 // decided them. last_post_at IS computed here (not in --profile): the
 // pinned-post contamination found in the 2026-08-26 AU run means it needs
@@ -298,7 +491,8 @@ async function stageGate(apifyToken: string, limit: Market | undefined, confirme
   let query = supabase
     .from("discovery_candidates")
     .select("candidate_id, handle, followers, market_guess")
-    .is("gate_result", null) // only candidates that passed --profile's cheap gates and haven't been gated yet
+    .is("gate_result", null) // hasn't been gated yet (and didn't fail cheap gates or classification)
+    .in("classification", ["career_coach", "adjacent"]) // --classify must have run and approved this candidate
     .not("followers", "is", null); // needs --profile to have run first
 
   if (limit) query = query.eq("market_guess", limit);
@@ -425,14 +619,14 @@ async function stageShortlist() {
   const supabase = getSupabaseClient();
   const { data, error } = await supabase
     .from("discovery_candidates")
-    .select("candidate_id, platform, handle, display_name, followers, market_guess, video_posts_90d, median_vpf_90d, band, found_via")
+    .select("candidate_id, platform, handle, display_name, followers, market_guess, video_posts_90d, median_vpf_90d, band, found_via, classification, classification_reason")
     .eq("gate_result", "pass")
     .order("median_vpf_90d", { ascending: false });
   if (error) throw new Error(`Failed to read discovery_candidates: ${error.message}`);
 
   const columns = [
     "candidate_id", "platform", "handle", "display_name", "followers", "market_guess",
-    "video_posts_90d", "median_vpf_90d", "band", "found_via",
+    "video_posts_90d", "median_vpf_90d", "band", "found_via", "classification", "classification_reason",
     "relevance_score", "topic_slugs", "proposed_tier", "reviewed_by",
   ];
   const lines = [columns.join(",")];
@@ -448,6 +642,8 @@ async function stageShortlist() {
       median_vpf_90d: String(row.median_vpf_90d ?? ""),
       band: row.band ?? "",
       found_via: row.found_via ?? "",
+      classification: row.classification ?? "",
+      classification_reason: row.classification_reason ?? "",
       relevance_score: "",
       topic_slugs: "",
       proposed_tier: "",
@@ -475,6 +671,21 @@ async function stagePromote(filePath: string) {
     if (!row.reviewed_by?.trim() || !row.proposed_tier?.trim()) {
       refused += 1;
       console.log(`REFUSED (missing reviewed_by or proposed_tier): ${row.handle}`);
+      continue;
+    }
+
+    // Defense in depth: migration 009's CHECK constraint already makes
+    // (promoted=true AND classification='regulated') impossible at the DB
+    // level, but refuse explicitly here too, with a clear message, rather
+    // than letting a human hit an opaque constraint-violation error.
+    const { data: candidateRow } = await supabase
+      .from("discovery_candidates")
+      .select("classification")
+      .eq("candidate_id", row.candidate_id)
+      .single();
+    if (candidateRow?.classification === "regulated") {
+      refused += 1;
+      console.log(`REFUSED (classification=regulated, hard-excluded regardless of performance): ${row.handle}`);
       continue;
     }
 
@@ -522,6 +733,7 @@ async function main() {
 
   if (args.search) await stageSearch(apifyToken!, args.limit, args.confirm);
   if (args.profile) await stageProfile(apifyToken!, args.confirm);
+  if (args.classify) await stageClassify(args.limit);
   if (args.gate) await stageGate(apifyToken!, args.limit, args.confirm, args.sample);
   if (args.shortlist) await stageShortlist();
   if (args.promote) {
@@ -529,8 +741,8 @@ async function main() {
     await stagePromote(args.file);
   }
 
-  if (!args.search && !args.profile && !args.gate && !args.shortlist && !args.promote) {
-    console.log("Usage: discover.ts --search|--profile|--gate|--shortlist|--promote [--limit=AU|CA|US] [--confirm] [--file <path>]");
+  if (!args.search && !args.profile && !args.classify && !args.gate && !args.shortlist && !args.promote) {
+    console.log("Usage: discover.ts --search|--profile|--classify|--gate|--shortlist|--promote [--limit=AU|CA|US] [--confirm] [--sample=N] [--file <path>]");
   }
 }
 
