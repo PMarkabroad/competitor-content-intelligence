@@ -253,7 +253,13 @@ async function stageProfile(apifyToken: string, confirmed: boolean) {
   const { data: pending, error } = await supabase
     .from("discovery_candidates")
     .select("candidate_id, handle")
-    .is("followers", null);
+    .is("followers", null)
+    // Excludes rows already marked terminal (e.g. "profile scrape
+    // returned no data" from a prior --profile run) -- without this,
+    // every already-confirmed-dead handle gets re-attempted (and
+    // re-billed) on every subsequent --profile run, forever, since a
+    // dead handle's followers stays null.
+    .is("gate_result", null);
   if (error) throw new Error(`Failed to read discovery_candidates: ${error.message}`);
   if (!pending || pending.length === 0) {
     console.log("No candidates need profiling.");
