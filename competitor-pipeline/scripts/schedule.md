@@ -1,26 +1,56 @@
 # Orchestration schedule
 
-Describes the intended cron setup. **No live schedules have been created —
-this is documentation only**, for whoever wires up the actual scheduler
-(Apify's own scheduler, GitHub Actions, a cron box, etc).
+Describes the intended cron setup. **The runner script (`scheduled_harvest.ts`)
+is built and verified against real accounts (2026-08-26) — no OS-level
+schedule (cron/Task Scheduler/Apify Scheduler) has been registered to call
+it automatically yet.** That's still a deliberate, separate decision left
+open below, since it means real, unattended recurring spend.
 
 ## Harvest cadence, by tier
 
 | Tier | Cadence | Trigger | Runs |
 |---|---|---|---|
-| T1 | Weekly | e.g. Monday 06:00 AEST | `build_run_input.ts --tier T1` → Apify `posts` + `profile` actors → `ingest.ts` |
-| T2 | Fortnightly | Same day, every 2nd week | `build_run_input.ts --tier T2` → same actors → `ingest.ts` |
-| T3 | Monthly | 1st of the month | `build_run_input.ts --tier T3` → same actors, `sortByViewsWindowDays` set → `ingest.ts` |
+| T1 | Weekly | e.g. Monday 06:00 AEST | Not wired to this scheduler -- stays manual (see note below) |
+| T2 | Fortnightly | Same day, every 2nd week | `npm run scheduled-harvest -- --tier T2` |
+| T3 | Monthly | 1st of the month | `npm run scheduled-harvest -- --tier T3` |
 
-Each tier's run:
-1. `build_run_input.ts --tier <T1|T2|T3>` reads active, handle-verified
-   competitors for that tier and emits run input JSON (refuses to run if
-   the spend guard in `config.ts` would be exceeded).
-2. That JSON drives the Apify `profile` and `posts` actors (see
-   `apify/actors.json`).
-3. Each actor run's webhook fires `ingest.ts`, which upserts into
-   `competitor_snapshots` / `competitor_posts` and flags any T1 account
-   that returned zero rows.
+T1 is exempt from scoring (`SCOREABLE_TIERS` in `config.ts` is `["T2","T3"]`
+only) and was deliberately left off this scheduler -- see Prompt 4 Step 3.
+
+`scripts/scheduled_harvest.ts` (single script, platform-aware) replaces the
+originally-planned `build_run_input.ts` + webhook-`ingest.ts` split for the
+scheduled path -- `build_run_input.ts` still exists and is useful for
+eyeballing a run's shape/estimated cost before committing to it, but its own
+cap check only compares its estimate against the *full* cap, not remaining
+budget, so it is not spend-safe to run unattended on its own.
+
+Each scheduled run:
+1. Reads active, handle-verified competitors for that tier (AU/US only --
+   CA stays `active=false` and out of scope regardless).
+2. Checks REAL month-to-date Apify spend (not just this run's estimate)
+   against `MONTHLY_APIFY_SPEND_CAP_USD`. If spend + this run's estimate
+   would exceed the cap, the run is **skipped** (loud log to stdout +
+   `logs/scheduled-harvest-<date>.log`), not failed and not run partially.
+3. Branches per competitor by `platform`:
+   - `instagram`: `actors.profile` + `actors.posts` (one call each per
+     competitor), incremental via `onlyPostsNewerThan`.
+   - `tiktok`: ALL tiktok competitors sharing the same since-date are
+     batched into ONE `actors.tiktokPosts` call (`profiles` mode) --
+     this actor has a $0.50-per-run minimum charge, so one call per
+     competitor would multiply that minimum unnecessarily (confirmed via
+     the pricing API, see `apify/actors.json`'s comments). Author-level
+     fields (`authorMeta.fans` etc.) are normalized into the same profile
+     shape Instagram produces; no separate TikTok profile call is needed.
+4. Upserts into `competitor_snapshots` / `competitor_posts` via
+   `ingest.ts`'s `ingestProfile`/`ingestPost`, same as the webhook path.
+5. Flags (loud log) any active, in-scope competitor whose run was a FULL
+   pull (`last_scraped_at` was null going in) that returned zero post
+   rows. An incremental pull returning zero rows is NOT flagged -- that's
+   the routine, expected outcome of a quiet posting window on a
+   fortnightly/monthly cadence, confirmed for real on the second of this
+   session's two back-to-back T2 test runs (2 of 3 accounts correctly
+   returned "no new posts" a few minutes after their first harvest, with
+   no genuine problem).
 
 ## Transcription pass
 
@@ -47,8 +77,12 @@ reads monthly once tagging has happened.
 
 ## Not covered here
 
-- The actual scheduler implementation (Apify Scheduler vs GitHub Actions
-  cron vs something else) — a deliberate choice left open.
+- Registering `npm run scheduled-harvest -- --tier <T2|T3>` with an actual
+  OS-level/cloud scheduler (Windows Task Scheduler, Apify Scheduler,
+  GitHub Actions cron, etc.) — the runner itself is built and verified,
+  but wiring it to fire unattended is a separate decision (real,
+  autonomous recurring spend against a live Apify account), left open on
+  purpose rather than assumed.
 - Retry/backoff policy for failed Apify runs.
-- Alerting destination for the T1-zero-rows flag beyond stdout + `logs/`
-  (e.g. wiring it to Slack) — not built yet.
+- Alerting destination for the zero-rows-on-full-pull flag beyond stdout +
+  `logs/` (e.g. wiring it to Slack) — not built yet.
