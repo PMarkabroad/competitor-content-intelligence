@@ -8,7 +8,12 @@ data/
 competitor-pipeline/node_modules/
 competitor-pipeline/dist/
 competitor-pipeline/logs/*.log
-competitor-pipeline/out/
+competitor-pipeline/out/*
+# ...except the monthly hook report itself -- a real deliverable (read by a
+# designer/content producer), not a transient scratch/debug artifact like
+# the rest of out/. (Must exclude contents via /out/* rather than /out/ --
+# git can't re-include a file whose parent directory is itself excluded.)
+!competitor-pipeline/out/hook_report_*.md
 
 # Supabase CLI local cache (project ref, pooler URL, DB host -- infra metadata, not source)
 supabase/.temp/

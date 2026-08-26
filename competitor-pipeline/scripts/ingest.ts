@@ -204,7 +204,7 @@ export async function ingestPost(
   if (error) throw new Error(`competitor_posts upsert failed: ${error.message}`);
 }
 
-async function ingestTranscript(
+export async function ingestTranscript(
   supabase: SupabaseClient,
   postId: string,
   item: Record<string, unknown>
