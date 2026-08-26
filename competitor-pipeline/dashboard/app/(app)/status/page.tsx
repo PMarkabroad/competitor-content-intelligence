@@ -39,7 +39,8 @@ export default async function StatusPage() {
   const overdueRows = active.filter((r) => isOverdue(r.last_scraped_at, r.tier, r.scrape_cadence));
   const lowMedianRows = rows.filter((r) => r.low_median_flag);
 
-  const spendPct = spend !== null ? Math.min(100, (spend / MONTHLY_APIFY_SPEND_CAP_USD) * 100) : null;
+  const spendPct =
+    spend !== null && MONTHLY_APIFY_SPEND_CAP_USD !== null ? Math.min(100, (spend / MONTHLY_APIFY_SPEND_CAP_USD) * 100) : null;
 
   return (
     <div className="p-4">
@@ -62,6 +63,10 @@ export default async function StatusPage() {
           <h2 className="mb-2 text-xs font-semibold text-[var(--color-text-faint)]">Apify spend (month to date)</h2>
           {spend === null ? (
             <p className="text-xs text-[var(--color-text-faint)]">Spend unavailable -- APIFY_TOKEN not set.</p>
+          ) : MONTHLY_APIFY_SPEND_CAP_USD === null ? (
+            <p className="text-xs text-[var(--color-text-faint)]">
+              ${spend.toFixed(2)} spent -- cap unavailable, MONTHLY_APIFY_SPEND_CAP_USD not set.
+            </p>
           ) : (
             <>
               <p className="mb-1 text-sm font-medium text-[var(--color-text)]">

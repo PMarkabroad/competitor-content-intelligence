@@ -1,11 +1,17 @@
 import "server-only";
-// Imports the CLI pipeline's own config.ts directly (plain object export,
-// no imports of its own) rather than duplicating MONTHLY_APIFY_SPEND_CAP_USD
-// as a second env var -- one source of truth for the cap, same as every
-// script in scripts/ already reads.
-import { config } from "../../config";
 
-export const MONTHLY_APIFY_SPEND_CAP_USD = config.MONTHLY_APIFY_SPEND_CAP_USD;
+// Originally imported the CLI pipeline's own config.ts directly
+// (../../config, a plain object export with no imports of its own) to
+// avoid a second source of truth for the cap. That broke the real Vercel
+// deployment: only dashboard/ is uploaded as its own project root, so
+// ../../config.ts doesn't exist in the deployed filesystem ("Module not
+// found: Can't resolve '../../config'", confirmed via the actual build
+// log on 2026-08-26). An env var is the only thing that reaches both
+// runtimes -- kept in sync with config.ts's MONTHLY_APIFY_SPEND_CAP_USD
+// by hand; there's no way to share one TypeScript source between two
+// independently-deployed projects without a shared package.
+const rawCap = process.env.MONTHLY_APIFY_SPEND_CAP_USD;
+export const MONTHLY_APIFY_SPEND_CAP_USD = rawCap ? Number(rawCap) : null;
 
 export async function getMonthToDateApifySpend(): Promise<number | null> {
   const token = process.env.APIFY_TOKEN;
