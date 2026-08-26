@@ -12,3 +12,6 @@ competitor-pipeline/out/
 
 # Supabase CLI local cache (project ref, pooler URL, DB host -- infra metadata, not source)
 supabase/.temp/
+
+# Claude Code harness-internal state, not project source
+.claude/

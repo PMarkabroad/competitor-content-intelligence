@@ -28,7 +28,7 @@
     "build": "0.0.597",
     "pinnedAt": "2026-08-26",
     "verifiedVia": "GET https://api.apify.com/v2/acts/clockworks~tiktok-scraper -- confirmed this exact build (buildNumberInt 597) is the actor's own 'latest' tag as of pin date; 243K+ total users",
-    "input": { "searchQueries": ["<seed-query>", "..."], "resultsPerPage": 10 },
+    "input": { "searchQueries": ["<seed-query>", "..."], "resultsPerPage": 25 },
     "_comment": "discover.ts --search stage. searchQueries applies to both videos and profiles per the actor's own input schema description -- batch ALL seed queries for a sweep (or a market) into ONE call's searchQueries array, not one call per query: the actor has a $0.50 minimumMaxTotalChargeUsd per RUN (confirmed via pricing API), so many small single-query runs would multiply that minimum unnecessarily. resultsPerPage (DISCOVERY_SEARCH_RESULTS_PER_QUERY in config.ts) is the primary cost lever here. Every call MUST pass build=0.0.597 explicitly, never 'latest'."
   },
   "tiktokPosts": {
@@ -36,15 +36,15 @@
     "build": "0.0.597",
     "pinnedAt": "2026-08-26",
     "verifiedVia": "Same actor/build as tiktokSearch above -- confirmed its `profiles` input mode (pull a profile's own videos) via GET .../builds/default inputSchema on 2026-08-26",
-    "input": { "profiles": ["<handle>", "..."], "resultsPerPage": 10 },
-    "_comment": "discover.ts --gate stage. Same actor as tiktokSearch, different input mode: profiles instead of searchQueries. Batch as many candidate handles as possible into one call for the same $0.50-per-run-minimum reason. resultsPerPage here is DISCOVERY_GATE_MAX_POSTS_PER_CANDIDATE in config.ts -- this is the expensive stage: cost is candidates x posts-per-candidate, not just candidates, and dominates the full-sweep cost estimate in config.ts's MONTHLY_APIFY_SPEND_CAP_USD comment. Every call MUST pass build=0.0.597 explicitly, never 'latest'."
+    "input": { "profiles": ["<handle>", "..."], "resultsPerPage": 10, "excludePinnedPosts": true },
+    "_comment": "discover.ts --gate stage. Same actor as tiktokSearch, different input mode: profiles instead of searchQueries. excludePinnedPosts:true is required -- confirmed on the 2026-08-26 AU run that 63.4% of resultsPerPage:1 results without it were TikTok's pinned post, not the actual most recent one (same failure mode as the Instagram pinned-post bug found earlier in this pipeline). Batch as many candidate handles as possible into one call for the same $0.50-per-run-minimum reason. resultsPerPage here is DISCOVERY_GATE_MAX_POSTS_PER_CANDIDATE in config.ts. This stage also now computes last_post_at (moved here from --profile/tiktokProfile, see that entry's comment) alongside video_posts_90d/median_vpf_90d -- it's the expensive stage: cost is candidates x posts-per-candidate, not just candidates. Every call MUST pass build=0.0.597 explicitly, never 'latest'."
   },
   "tiktokProfile": {
     "actorId": "clockworks/tiktok-profile-scraper",
     "build": "0.0.468",
     "pinnedAt": "2026-08-26",
     "verifiedVia": "GET https://api.apify.com/v2/acts/clockworks~tiktok-profile-scraper -- confirmed this exact build (buildNumberInt 468) is the actor's own 'latest' tag as of pin date; 37K+ total users",
-    "input": { "profiles": ["<handle>", "..."] },
-    "_comment": "discover.ts --profile stage. Populates followers, bio, is_private, last_post_at for every candidate with a null followers value. Batch candidates into one call, same per-run-minimum reasoning as above. Every call MUST pass build=0.0.468 explicitly, never 'latest'."
+    "input": { "profiles": ["<handle>", "..."], "profileScrapeSections": ["videos"], "resultsPerPage": 1 },
+    "_comment": "discover.ts --profile stage -- the CHEAP gate stage (revision 3): populates followers/bio/is_private and immediately fails candidates on followers<1000 or is_private, before any expensive post pull. last_post_at is deliberately NOT gated here (moved to tiktokPosts/--gate, see that entry's comment): confirmed on the 2026-08-26 AU run that resultsPerPage:1 without excludePinnedPosts returns TikTok's pinned post 63.4% of the time, not the actual most recent one, so this single item's createTime cannot be trusted for recency. followers/is_private are author-level metadata and unaffected by pinning, so they stay here. resultsPerPage MUST be 1: this actor's default is 100 posts/profile (it's a profile+videos scraper, not profile-only), so leaving it unset would make this 'cheap' stage cost ~100x more (confirmed via the actor's input schema on 2026-08-26 -- profileScrapeSections defaults to ['videos'], resultsPerPage defaults to 100). Batch candidates into one call, same per-run-minimum reasoning as tiktokSearch. Every call MUST pass build=0.0.468 explicitly, never 'latest'."
   }
 }

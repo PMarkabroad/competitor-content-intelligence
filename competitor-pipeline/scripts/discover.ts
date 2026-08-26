@@ -19,11 +19,15 @@
  *
  * Every stage prints an estimated cost and requires --confirm to actually
  * call Apify. --limit=<market> scopes --search/--gate to one market.
+ * --sample=<N> (--gate only) randomly samples N candidates from the
+ * eligible pool instead of gating all of them -- for a budget-capped run,
+ * gives an unbiased read on the true pass rate rather than skewing toward
+ * whatever an arbitrary ordering (e.g. by followers) would favor.
  *
  * Usage:
  *   npm run discover -- --search --confirm [--limit=AU]
  *   npm run discover -- --profile --confirm
- *   npm run discover -- --gate --confirm [--limit=AU]
+ *   npm run discover -- --gate --confirm [--limit=AU] [--sample=55]
  *   npm run discover -- --shortlist
  *   npm run discover -- --promote --file out/discovery_shortlist.csv
  */
@@ -100,6 +104,10 @@ function parseArgs() {
     promote: args.includes("--promote"),
     confirm: args.includes("--confirm"),
     limit: limitArg ? (limitArg.split("=")[1] as Market) : undefined,
+    sample: (() => {
+      const a = args.find((a) => a.startsWith("--sample="));
+      return a ? Number(a.split("=")[1]) : undefined;
+    })(),
     file: (() => {
       const i = args.indexOf("--file");
       return i >= 0 ? args[i + 1] : undefined;
@@ -183,7 +191,25 @@ async function stageSearch(apifyToken: string, limit: Market | undefined, confir
   console.log(`Inserted ${inserted} new candidate(s) into discovery_candidates.`);
 }
 
-// --- --profile ----------------------------------------------------------
+// --- --profile (cheap gates: followers, is_private only) -----------------
+//
+// last_post_at is NOT gated here, despite the original design intent --
+// found on the first real AU run (2026-08-26) that resultsPerPage=1
+// without excludePinnedPosts returns TikTok's PINNED post 63.4% of the
+// time (168/265 candidates), not the actual most recent one. Same failure
+// mode as the Instagram pinned-post contamination found earlier in this
+// pipeline's build. Re-running --profile with excludePinnedPosts:true
+// would fix it but costs another ~$0.80 on an already-tight budget: since
+// --gate pulls multiple posts per candidate anyway (and DOES set
+// excludePinnedPosts there), last_post_at is computed for free as part of
+// that pull instead. followers/is_private are unaffected by pinning
+// (author-level metadata, not post-level) and stay gated here.
+//
+// resultsPerPage MUST still be 1. The tiktok-profile-scraper actor's
+// default is 100 posts/profile (it's a profile+videos scraper, not a
+// profile-only lookup) -- leaving it unset would have made this "cheap"
+// stage cost ~100x more than intended. Field names below are confirmed
+// against a real response (2026-08-26 AU run), not guessed.
 
 async function stageProfile(apifyToken: string, confirmed: boolean) {
   const actors = loadActors();
@@ -199,56 +225,99 @@ async function stageProfile(apifyToken: string, confirmed: boolean) {
     return;
   }
 
-  const estimateUsd = Math.max(0.01, pending.length * 0.003 + 0.001);
+  const estimateUsd = Math.max(0.01, pending.length * 1 * 0.003 + 0.001);
   if (!costGate("profile", estimateUsd, confirmed)) return;
 
   const items = await runApifyActor(
     actors.tiktokProfile,
-    { profiles: pending.map((p) => p.handle) },
+    { profiles: pending.map((p) => p.handle), profileScrapeSections: ["videos"], resultsPerPage: 1 },
     apifyToken
   );
   console.log(`Profile stage returned ${items.length} item(s).`);
 
   const byHandle = new Map<string, string>(pending.map((p) => [p.handle, p.candidate_id]));
+  const gates = config.DISCOVERY_GATES;
+
   let updated = 0;
+  let cheapFailed = 0;
   for (const item of items) {
-    const handle = String(item.uniqueId ?? item.name ?? "");
+    const author = (item.authorMeta ?? item.author ?? {}) as Record<string, unknown>;
+    const handle = String(author.name ?? author.uniqueId ?? item.uniqueId ?? "");
     const candidateId = byHandle.get(handle);
     if (!candidateId) continue;
+
+    const followers = Number(author.fans ?? author.followerCount ?? item.fans ?? 0) || null;
+    const isPrivate = Boolean(author.privateAccount ?? author.isPrivate ?? item.privateAccount ?? false);
+
+    const failReasons: string[] = [];
+    if (followers === null || followers < gates.minFollowers) {
+      failReasons.push(`followers=${followers} < ${gates.minFollowers}`);
+    }
+    if (isPrivate) {
+      failReasons.push("is_private=true");
+    }
+
+    const cheapGateFailed = failReasons.length > 0;
+    if (cheapGateFailed) cheapFailed += 1;
 
     const { error: updateError } = await supabase
       .from("discovery_candidates")
       .update({
-        followers: item.fans ?? item.followerCount ?? null,
-        bio: item.signature ?? null,
-        is_private: item.privateAccount ?? item.isPrivate ?? null,
-        last_post_at: null, // populated in --gate from actual post data, not this actor
+        followers,
+        bio: author.signature ?? item.signature ?? null,
+        is_private: isPrivate,
+        // Only write a terminal gate_result here on failure -- passing
+        // candidates stay gate_result=null so --gate's `is('gate_result',
+        // null)` filter picks them up for the expensive post pull. Writing
+        // 'pass' here would be premature: last_post_at, video_posts_90d
+        // and median_vpf_90d haven't been checked yet.
+        gate_result: cheapGateFailed ? "fail" : null,
+        gate_fail_reason: cheapGateFailed ? failReasons.join("; ") : null,
       })
       .eq("candidate_id", candidateId);
     if (!updateError) updated += 1;
   }
-  console.log(`Updated ${updated} candidate(s).`);
+  console.log(`Updated ${updated} candidate(s). ${cheapFailed} failed a cheap gate (followers/private) and will not proceed to --gate.`);
 }
 
-// --- --gate ---------------------------------------------------------------
+// --- --gate (expensive gates: video_posts_90d, median_vpf_90d) -----------
+//
+// Only ever runs against candidates that already passed --profile's cheap
+// gates (followers, is_private) -- gate_result stays null for a passing
+// --profile candidate specifically so this query picks them up.
+// followers/is_private are NOT re-checked here -- --profile already
+// decided them. last_post_at IS computed here (not in --profile): the
+// pinned-post contamination found in the 2026-08-26 AU run means it needs
+// excludePinnedPosts:true and multiple posts to find reliably, which this
+// stage already pulls for video_posts_90d/median_vpf_90d anyway.
 
-async function stageGate(apifyToken: string, limit: Market | undefined, confirmed: boolean) {
+async function stageGate(apifyToken: string, limit: Market | undefined, confirmed: boolean, sampleSize?: number) {
   const actors = loadActors();
   const supabase = getSupabaseClient();
 
   let query = supabase
     .from("discovery_candidates")
-    .select("candidate_id, handle, followers, market_guess, is_private")
-    .is("gate_result", null) // never process an already-decided row -- pass stays passed, fail stays skipped
+    .select("candidate_id, handle, followers, market_guess")
+    .is("gate_result", null) // only candidates that passed --profile's cheap gates and haven't been gated yet
     .not("followers", "is", null); // needs --profile to have run first
 
   if (limit) query = query.eq("market_guess", limit);
 
-  const { data: pending, error } = await query;
+  let { data: pending, error } = await query;
   if (error) throw new Error(`Failed to read discovery_candidates: ${error.message}`);
   if (!pending || pending.length === 0) {
-    console.log("No candidates ready to gate (need --profile run first, or all already gated).");
+    console.log("No candidates ready to gate (need --profile run first, all failed a cheap gate, or all already gated).");
     return;
+  }
+
+  if (sampleSize !== undefined && pending.length > sampleSize) {
+    // Random (not ordering-biased) sample -- for a budget-capped run, this
+    // gives an unbiased read on the true pass rate across the full pool,
+    // extrapolatable to the candidates left ungated, rather than skewing
+    // toward whatever an arbitrary sort (e.g. by followers) would favor.
+    const shuffled = [...pending].sort(() => Math.random() - 0.5);
+    pending = shuffled.slice(0, sampleSize);
+    console.log(`--sample=${sampleSize}: randomly sampled ${pending.length} of the full eligible pool.`);
   }
 
   const estimatedResults = pending.length * config.DISCOVERY_GATE_MAX_POSTS_PER_CANDIDATE;
@@ -257,7 +326,11 @@ async function stageGate(apifyToken: string, limit: Market | undefined, confirme
 
   const items = await runApifyActor(
     actors.tiktokPosts,
-    { profiles: pending.map((p) => p.handle), resultsPerPage: config.DISCOVERY_GATE_MAX_POSTS_PER_CANDIDATE },
+    {
+      profiles: pending.map((p) => p.handle),
+      resultsPerPage: config.DISCOVERY_GATE_MAX_POSTS_PER_CANDIDATE,
+      excludePinnedPosts: true, // see stageProfile's header comment -- pinned posts contaminate recency
+    },
     apifyToken
   );
   console.log(`Gate stage returned ${items.length} post item(s).`);
@@ -273,6 +346,7 @@ async function stageGate(apifyToken: string, limit: Market | undefined, confirme
 
   const ninetyDaysAgo = Date.now() - 90 * 24 * 60 * 60 * 1000;
   const thirtyDaysAgo = Date.now() - config.DISCOVERY_GATES.maxDaysSinceLastPost * 24 * 60 * 60 * 1000;
+  const gates = config.DISCOVERY_GATES;
 
   for (const candidate of pending) {
     const posts = postsByHandle.get(candidate.handle) ?? [];
@@ -280,6 +354,12 @@ async function stageGate(apifyToken: string, limit: Market | undefined, confirme
       const ts = Number(p.createTimeISO ? Date.parse(String(p.createTimeISO)) : Number(p.createTime) * 1000);
       return !Number.isNaN(ts) && ts >= ninetyDaysAgo;
     });
+
+    const lastPostTs = posts.reduce((max, p) => {
+      const ts = Number(p.createTimeISO ? Date.parse(String(p.createTimeISO)) : Number(p.createTime) * 1000);
+      return !Number.isNaN(ts) && ts > max ? ts : max;
+    }, 0);
+    const lastPostAt = lastPostTs > 0 ? new Date(lastPostTs).toISOString() : null;
 
     const followers = candidate.followers as number;
     const vpfs = videoPostsInWindow
@@ -292,30 +372,17 @@ async function stageGate(apifyToken: string, limit: Market | undefined, confirme
       .sort((a, b) => a - b);
     const medianVpf = vpfs.length > 0 ? vpfs[Math.floor(vpfs.length / 2)] : null;
 
-    const lastPostTs = posts.reduce((max, p) => {
-      const ts = Number(p.createTimeISO ? Date.parse(String(p.createTimeISO)) : Number(p.createTime) * 1000);
-      return !Number.isNaN(ts) && ts > max ? ts : max;
-    }, 0);
-    const lastPostAt = lastPostTs > 0 ? new Date(lastPostTs).toISOString() : null;
-
     const band = resolveBand(followers);
-    const gates = config.DISCOVERY_GATES;
 
     const failReasons: string[] = [];
+    if (!lastPostAt || lastPostTs < thirtyDaysAgo) {
+      failReasons.push(`last_post_at=${lastPostAt ?? "null"} outside ${gates.maxDaysSinceLastPost}-day window`);
+    }
     if (videoPostsInWindow.length < gates.minVideoPosts90d) {
       failReasons.push(`video_posts_90d=${videoPostsInWindow.length} < ${gates.minVideoPosts90d}`);
     }
     if (medianVpf === null || medianVpf < band.minMedianVpf) {
       failReasons.push(`median_vpf_90d=${medianVpf?.toFixed(5) ?? "null"} < ${band.name}-band floor ${band.minMedianVpf}`);
-    }
-    if (followers < gates.minFollowers) {
-      failReasons.push(`followers=${followers} < ${gates.minFollowers}`);
-    }
-    if (candidate.is_private === true) {
-      failReasons.push("is_private=true");
-    }
-    if (!lastPostAt || lastPostTs < thirtyDaysAgo) {
-      failReasons.push(`last_post_at=${lastPostAt ?? "null"} outside ${gates.maxDaysSinceLastPost}-day window`);
     }
     // market_guess: 'unknown' passes through for human review, never
     // silently gated -- only a concrete non-AU/CA/US value fails.
@@ -329,9 +396,9 @@ async function stageGate(apifyToken: string, limit: Market | undefined, confirme
     const { error: updateError } = await supabase
       .from("discovery_candidates")
       .update({
+        last_post_at: lastPostAt,
         video_posts_90d: videoPostsInWindow.length,
         median_vpf_90d: medianVpf,
-        last_post_at: lastPostAt,
         band: band.name,
         gate_result: gateResult,
         gate_fail_reason: failReasons.length > 0 ? failReasons.join("; ") : null,
@@ -455,7 +522,7 @@ async function main() {
 
   if (args.search) await stageSearch(apifyToken!, args.limit, args.confirm);
   if (args.profile) await stageProfile(apifyToken!, args.confirm);
-  if (args.gate) await stageGate(apifyToken!, args.limit, args.confirm);
+  if (args.gate) await stageGate(apifyToken!, args.limit, args.confirm, args.sample);
   if (args.shortlist) await stageShortlist();
   if (args.promote) {
     if (!args.file) throw new Error("--promote requires --file <path-to-completed-shortlist.csv>");

@@ -100,18 +100,34 @@ export const config = {
   },
 
   /**
-   * Volume controls, both directly load-bearing for discovery cost -- see
-   * the worked estimate in migration 008 / discover.ts's header comment.
-   * SEARCH_RESULTS_PER_QUERY is clockworks/tiktok-scraper's resultsPerPage
-   * applied to the --search stage (videos+profiles per seed query).
-   * GATE_MAX_POSTS_PER_CANDIDATE is the same field applied per-candidate
-   * in the --gate stage -- the expensive stage, since cost there is
-   * candidates x posts-per-candidate, not just candidates. minVideoPosts90d
+   * Volume controls. SEARCH_RESULTS_PER_QUERY is
+   * clockworks/tiktok-scraper's resultsPerPage applied to the --search
+   * stage (videos+profiles per seed query). GATE_MAX_POSTS_PER_CANDIDATE
+   * is the same field applied per-candidate in --gate. minVideoPosts90d
    * above requires 8 in-window video posts to pass, so this cap needs
-   * enough margin over 8 to actually see whether an account clears it,
-   * without pulling far more than needed.
+   * enough margin over 8 to actually see whether an account clears it.
+   *
+   * Raised from 10 to 25 on 2026-08-26 (discovery pass, revision 2):
+   * TikTok search author-duplicates heavily within a thematically
+   * clustered query set (all 15 queries per market orbit the same 6 topic
+   * slugs), so the top ~10 results per query converge on the same
+   * handful of head accounts across queries. Estimated unique-handle
+   * yield (unconfirmed until a real --search run -- this is the thing the
+   * AU sweep is meant to calibrate):
+   *   R=10: ~150 raw results/market, ~55-65 unique handles/market
+   *         (top results converge heavily; ~35-45% unique)
+   *   R=25: ~375 raw results/market, ~100-130 unique handles/market
+   *         (the deeper 15 results/query are less likely to repeat the
+   *         same head accounts, so uniqueness improves in the tail --
+   *         yield grows ~1.7-2.2x, not the full 2.5x raw-result increase)
+   *
+   * Gate stage now runs AFTER --profile's cheap gates (followers,
+   * is_private, last_post_at) pre-filter the pool -- see
+   * DISCOVERY_GATE_MAX_POSTS_PER_CANDIDATE below and stageGate in
+   * discover.ts. Full worked cost estimate is in
+   * MONTHLY_APIFY_SPEND_CAP_USD's comment further down.
    */
-  DISCOVERY_SEARCH_RESULTS_PER_QUERY: 10,
+  DISCOVERY_SEARCH_RESULTS_PER_QUERY: 25,
   DISCOVERY_GATE_MAX_POSTS_PER_CANDIDATE: 10,
 
   /** Trailing window used to compute each competitor's baseline median vpf. */
@@ -166,33 +182,47 @@ export const config = {
    *   volume or outlier count runs high.
    *
    * Raised to $12 to cover a full discovery sweep (migration 008,
-   * discover.ts), calculated from real clockworks/tiktok-scraper and
-   * clockworks/tiktok-profile-scraper pricing (confirmed via the Apify API
-   * on 2026-08-26), not guessed:
-   *   --search:  45 seed queries (15/market x AU/CA/US) x
-   *              DISCOVERY_SEARCH_RESULTS_PER_QUERY (10) results
-   *              = 450 results x $0.0037/result (tiktok-scraper, FREE
-   *              tier) = ~$1.67
-   *   --profile: ~180 unique candidates estimated after dedup (60/market)
-   *              x $0.003/result (tiktok-profile-scraper) = ~$0.54
-   *   --gate:    180 candidates x DISCOVERY_GATE_MAX_POSTS_PER_CANDIDATE
-   *              (10) x $0.0037/result (tiktok-scraper) = ~$6.66 -- this
-   *              is where the money goes, because cost here is
-   *              candidates x posts-per-candidate, not just candidates
-   *   Full-sweep total: ~$1.67 + $0.54 + $6.66 = ~$8.87. $12 leaves
-   *   headroom above that estimate for candidate-count variance.
+   * discover.ts), revised 2026-08-26 (revision 2) after splitting --gate
+   * into a cheap stage (--profile: followers/is_private/last_post_at,
+   * $0.003/result) and an expensive stage (--gate: video_posts_90d/
+   * median_vpf_90d, needs a full post pull, $0.0037/result) -- cheap gates
+   * eliminate candidates BEFORE the expensive post pull, instead of
+   * pulling posts for every candidate and discarding most of them.
+   * Pricing confirmed via the Apify API on 2026-08-26, not guessed;
+   * unique-candidate and cheap-gate-pass-rate figures are estimates, not
+   * yet confirmed by a real run -- see DISCOVERY_SEARCH_RESULTS_PER_QUERY
+   * above for the unique-yield reasoning.
+   *
+   * Full 3-market sweep at R=25 (raised from R=10 alongside this split --
+   * see DISCOVERY_SEARCH_RESULTS_PER_QUERY):
+   *   --search:  45 queries x 25 results x $0.0037 = ~$4.16
+   *   --profile: ~330 unique candidates (110/market est.) x 1 result x
+   *              $0.003 = ~$0.99
+   *   --gate:    ~50% estimated cheap-gate pass rate -> ~165 candidates x
+   *              GATE_MAX_POSTS_PER_CANDIDATE (10) x $0.0037 = ~$6.11
+   *   Full-sweep total: ~$4.16 + $0.99 + $6.11 = ~$11.26
+   *
+   * For comparison, the same split at the original R=10 (i.e. holding
+   * search breadth fixed, isolating just the cheap/expensive split's
+   * effect): ~180 unique candidates, --profile ~$0.54, --gate at ~50%
+   * pass-rate ~90 x 10 x $0.0037 = ~$3.33 (down from ~$6.66 when every
+   * profiled candidate went straight to the expensive stage -- roughly
+   * half, or closer to a third at a ~33% pass rate; the exact figure
+   * depends on the real cheap-gate pass rate, unconfirmed until a real
+   * run). Search $1.67 + profile $0.54 + gate $3.33 = ~$5.54 total, down
+   * from the original ~$8.87 estimate for the same R=10 breadth.
    *
    * IMPORTANT: this is well above what the account can actually spend
    * right now. The Apify account is still on the FREE plan with a real
    * $5/month platform ceiling (confirmed via GET /v2/users/me on
    * 2026-08-26: tier FREE, maxMonthlyUsageUsd 5), and $0.66 of that is
    * already spent this cycle -- about $4.34 of real headroom left. A full
-   * 3-market discovery sweep (~$8.87) cannot complete on this plan; even a
-   * single-market run (--limit, ~$3) would nearly exhaust the remaining
-   * cycle. Raising this config value does NOT raise Apify's own limit --
-   * either upgrade the Apify plan before running a full sweep, or use
-   * --limit to scope discover.ts to one market at a time and stay inside
-   * the current plan.
+   * 3-market sweep at R=25 (~$11.26) cannot complete on this plan. A
+   * single-market run (--limit=AU, R=25) is estimated at ~$3.75 --
+   * fits inside the remaining cycle, but tightly. Raising this config
+   * value does NOT raise Apify's own limit -- either upgrade the Apify
+   * plan before running a full sweep, or use --limit to scope discover.ts
+   * to one market at a time and stay inside the current plan.
    */
   MONTHLY_APIFY_SPEND_CAP_USD: 12,
 
