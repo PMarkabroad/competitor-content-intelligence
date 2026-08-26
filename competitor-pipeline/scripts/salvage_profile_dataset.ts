@@ -6,15 +6,16 @@
  * run the exact same post-processing stageProfile() would have run on it.
  *
  * DATASET_ID must be set to the salvage target's defaultDatasetId (from
- * GET /v2/actor-runs/{runId}) before running. Used twice this session so
- * far: 2026-08-26 AU run (dataset Pbt7kLIJpjftaMN3a) and the US run
- * (dataset GdaULJMB5Ahprx9I1) -- update the constant per use.
+ * GET /v2/actor-runs/{runId}) before running. Used three times this
+ * session so far: 2026-08-26 AU run (dataset Pbt7kLIJpjftaMN3a), the US
+ * run (dataset GdaULJMB5Ahprx9I1), and the CA run (dataset
+ * SGltnjldiC1wpnymA) -- update the constant per use.
  */
 import "dotenv/config";
 import { config } from "../config.ts";
 import { getSupabaseClient } from "./lib/supabaseClient.ts";
 
-const DATASET_ID = "GdaULJMB5Ahprx9I1";
+const DATASET_ID = "SGltnjldiC1wpnymA";
 
 async function main() {
   const apifyToken = process.env.APIFY_TOKEN;
@@ -31,7 +32,11 @@ async function main() {
   const { data: pending, error } = await supabase
     .from("discovery_candidates")
     .select("candidate_id, handle")
-    .is("followers", null);
+    .is("followers", null)
+    // Same fix as stageProfile in discover.ts -- without this, every
+    // already-confirmed-dead handle from an earlier sweep gets mixed
+    // into this salvage's "pending" set too.
+    .is("gate_result", null);
   if (error) throw new Error(`Failed to read discovery_candidates: ${error.message}`);
   if (!pending || pending.length === 0) {
     console.log("No candidates need profiling.");

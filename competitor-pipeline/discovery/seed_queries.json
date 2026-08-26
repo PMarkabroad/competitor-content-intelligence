@@ -1,6 +1,7 @@
 {
   "_comment": "Seed queries for discover.ts --search, one array per market. Derived from six of the eight topic slugs in config/taxonomy.yaml (linkedin-networking, interview-performance, resume-not-working, no-local-experience, volume-no-results, no-callbacks). visa-time-pressure and visa-pr-blocker are deliberately NOT represented here -- no visa, PR or sponsorship queries. Giving migration advice is regulated activity in Australia; this system does not participate in those conversations, same rule as the X channel strategy. Those two topic slugs remain valid classification labels for whatever content a non-visa query happens to surface -- they're just never the thing being searched for. Edit this file directly to retune queries; no code changes needed.",
   "_comment_AU": "Rewritten 2026-08-26 after the first AU sweep showed the original first-person-experience phrasing ('no Australian experience', 'why can't I get a job Australia') matched expat-lifestyle vloggers just as readily as coaching content -- only 6 of 37 gated candidates were genuine career coaches. Rewritten in practitioner/advice language (what a coach would title their own content: 'resume tips', 'how to get a job'), which a lifestyle vlogger captioning their own life story is far less likely to use incidentally. --classify is still the primary relevance fix; this rewrite is a secondary lever to raise the relevant fraction of what --search surfaces in the first place.",
+  "_comment_CA": "Rewritten 2026-08-26, same practitioner-language pattern as AU's rewrite, before ever running a first CA sweep (not a post-hoc fix like AU's). Also deliberately excludes 'newcomer', 'immigrant' and 'internationally trained professional' -- not just visa/PR/sponsorship terms -- per explicit instruction: search queries should surface content by topic, not by migration status; --classify plus manual review is where relevance actually gets decided, not the search phrasing.",
   "AU": [
     "resume tips Australia",
     "interview tips Australia",
@@ -19,21 +20,21 @@
     "career coach for international professionals Australia"
   ],
   "CA": [
-    "no Canadian experience",
-    "newcomer jobs Canada",
-    "internationally trained professional Canada",
-    "resume not working Canada",
-    "job interview tips Canada",
-    "LinkedIn networking Canada jobs",
-    "career coach Canada immigrant",
-    "why can't I get a job Canada",
-    "job search Canada no response",
-    "immigrant job search Canada",
-    "Canadian job market newcomers",
-    "interview rejection Canada",
-    "LinkedIn profile Canada job search",
-    "applying for jobs Canada no interview",
-    "career advice newcomer Canada"
+    "resume tips Canada",
+    "interview tips Canada",
+    "how to get a job in Canada",
+    "LinkedIn tips for job seekers Canada",
+    "job search advice Canada",
+    "resume writing tips Canada",
+    "interview preparation tips Canada",
+    "career coaching Canada",
+    "job application tips Canada",
+    "how to write a resume for Canadian jobs",
+    "job interview advice Canada",
+    "career advice for graduates Canada",
+    "LinkedIn networking tips Canada",
+    "job hunting tips Canada",
+    "career coach for professionals Canada"
   ],
   "US": [
     "job search no callbacks",
