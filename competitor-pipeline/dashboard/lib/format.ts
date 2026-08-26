@@ -36,3 +36,25 @@ export function daysSince(value: string | null | undefined): number | null {
 
 // Overdue logic lives in lib/cadence.ts -- it needs tier as a fallback
 // since competitors.scrape_cadence isn't populated on every row.
+
+export function formatChange(value: number | null | undefined): string {
+  if (value === null || value === undefined) return "—";
+  const sign = value > 0 ? "+" : "";
+  return `${sign}${formatNumber(value)}`;
+}
+
+// TikTok/Instagram actor payloads carry a thumbnail under different keys.
+// competitor_posts.thumbnail_url is schema-only (nothing in scripts/
+// populates it yet), so existing rows fall back to deriving one from the
+// already-stored raw jsonb at read time.
+export function deriveThumbnailUrl(thumbnailUrl: string | null, raw: unknown): string | null {
+  if (thumbnailUrl) return thumbnailUrl;
+  if (!raw || typeof raw !== "object") return null;
+  const r = raw as Record<string, unknown>;
+  const videoMeta = r.videoMeta as Record<string, unknown> | undefined;
+  if (videoMeta?.coverUrl && typeof videoMeta.coverUrl === "string") return videoMeta.coverUrl;
+  if (typeof r.displayUrl === "string") return r.displayUrl;
+  if (typeof r.thumbnailUrl === "string") return r.thumbnailUrl;
+  if (typeof r.imageUrl === "string") return r.imageUrl;
+  return null;
+}

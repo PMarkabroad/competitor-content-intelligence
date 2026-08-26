@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useMemo, useState } from "react";
 import { Badge } from "./Badge";
 import { formatNumber, formatVpf, formatScore, formatDate } from "@/lib/format";
@@ -81,12 +82,13 @@ export function SortablePostsTable({ posts }: { posts: PostRow[] }) {
           {sorted.map((p) => (
             <tr key={p.post_id} className="border-b border-border last:border-b-0 hover:bg-surface-hover">
               <td className="px-2 py-1.5">
-                {p.post_url ? (
-                  <a href={p.post_url} target="_blank" rel="noreferrer" className="text-brand hover:underline">
-                    {p.post_type ?? "post"}
+                <Link href={`/reels/${p.post_id}`} className="text-brand hover:underline">
+                  {p.post_type ?? "post"}
+                </Link>
+                {p.post_url && (
+                  <a href={p.post_url} target="_blank" rel="noreferrer" className="ml-1.5 text-faint hover:text-dim" title="Open original">
+                    ↗
                   </a>
-                ) : (
-                  p.post_type ?? "—"
                 )}
               </td>
               <td className="px-2 py-1.5 text-right">{formatDate(p.posted_at)}</td>

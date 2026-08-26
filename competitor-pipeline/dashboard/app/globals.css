@@ -89,3 +89,55 @@ h3 {
 .data-table tbody tr {
   transition: background-color 120ms ease;
 }
+
+/* Rendered markdown for /reports -- generated from our own report
+   files (see out/hook_report_*.md), not third-party/user content. */
+.report-markdown h1 {
+  margin: 0 0 0.75rem;
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: var(--color-text);
+  letter-spacing: -0.01em;
+}
+.report-markdown h2 {
+  margin: 1.5rem 0 0.5rem;
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: var(--color-text);
+}
+.report-markdown h3 {
+  margin: 1.25rem 0 0.4rem;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--color-text);
+}
+.report-markdown p {
+  margin: 0 0 0.75rem;
+}
+.report-markdown ul,
+.report-markdown ol {
+  margin: 0 0 0.75rem 1.25rem;
+}
+.report-markdown li {
+  margin-bottom: 0.25rem;
+}
+.report-markdown strong {
+  color: var(--color-text);
+  font-weight: 600;
+}
+.report-markdown a {
+  color: var(--color-brand);
+  text-decoration: underline;
+}
+.report-markdown hr {
+  margin: 1.5rem 0;
+  border: none;
+  border-top: 1px solid var(--color-border);
+}
+.report-markdown code {
+  background: var(--color-bg);
+  border-radius: 4px;
+  padding: 0.1em 0.35em;
+  font-family: var(--font-mono);
+  font-size: 0.85em;
+}

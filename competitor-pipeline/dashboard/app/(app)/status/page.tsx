@@ -111,7 +111,7 @@ export default async function StatusPage() {
               return (
                 <tr key={r.competitor_id} className="border-b border-border last:border-b-0">
                   <td className="px-2 py-1">
-                    <Link href={`/roster/${r.handle}`} className="text-brand hover:underline">
+                    <Link href={`/competitors/${r.handle}`} className="text-brand hover:underline">
                       {r.handle}
                     </Link>
                   </td>
@@ -132,7 +132,7 @@ export default async function StatusPage() {
           <h2 className="mb-2 text-xs font-semibold text-faint">Flagged low_median_flag</h2>
           <div className="flex flex-wrap gap-2">
             {lowMedianRows.map((r) => (
-              <Link key={r.competitor_id} href={`/roster/${r.handle}`}>
+              <Link key={r.competitor_id} href={`/competitors/${r.handle}`}>
                 <Badge tone="warn">{r.handle}</Badge>
               </Link>
             ))}

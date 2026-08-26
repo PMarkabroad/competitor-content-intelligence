@@ -33,7 +33,7 @@ export const DATA_TABLES: TableConfig[] = [
   {
     name: "competitor_posts",
     columns: [
-      "post_id", "competitor_id", "platform_post_id", "post_url", "post_type", "caption",
+      "post_id", "competitor_id", "platform_post_id", "post_url", "thumbnail_url", "post_type", "caption",
       "posted_at", "views", "likes", "comments", "shares", "duration_seconds",
       "first_seen_at", "last_scraped_at", "paid_partnership", "is_repost", "followers_at_scrape",
     ],
@@ -52,9 +52,10 @@ export const DATA_TABLES: TableConfig[] = [
   {
     name: "hook_library",
     columns: [
-      "hook_id", "post_id", "competitor_id", "hook_pattern", "format", "topic_slug",
-      "opening_line", "outlier_score", "vpf", "au_transplant", "transplant_note",
-      "brand_fit", "brand_fit_note", "tagged_by", "tagged_at", "updated_at",
+      "hook_id", "post_id", "competitor_id", "hook_pattern", "format", "topic_slug", "sub_topic",
+      "opening_line", "content_angle", "cta", "narrative_structure", "duration_seconds",
+      "outlier_score", "vpf", "au_transplant", "transplant_note",
+      "brand_fit", "brand_fit_note", "why_it_performed", "tagged_by", "tagged_at", "updated_at",
     ],
     defaultSort: "tagged_at",
   },
