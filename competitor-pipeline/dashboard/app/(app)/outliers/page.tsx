@@ -51,15 +51,15 @@ export default async function OutliersPage() {
 
   return (
     <div className="p-4">
-      <h1 className="mb-1 text-sm font-semibold text-[var(--color-text)]">Transcription queue</h1>
-      <p className="mb-4 text-xs text-[var(--color-text-dim)]">
+      <h1 className="mb-1 text-sm font-semibold text-text">Transcription queue</h1>
+      <p className="mb-4 text-xs text-dim">
         {rows.length} outlier(s) waiting -- this is what would be spent on next.
       </p>
 
-      <div className="overflow-x-auto rounded border border-[var(--color-border)]">
+      <div className="overflow-x-auto panel">
         <table className="w-full border-collapse text-left text-xs">
           <thead>
-            <tr className="border-b border-[var(--color-border)] bg-[var(--color-bg-raised)] text-[var(--color-text-faint)]">
+            <tr className="border-b border-border bg-surface text-faint">
               <th className="px-2 py-1.5 font-medium">Competitor</th>
               <th className="px-2 py-1.5 font-medium">Caption</th>
               <th className="px-2 py-1.5 font-medium">Posted</th>
@@ -77,23 +77,23 @@ export default async function OutliersPage() {
               const competitor = competitorById.get(row.competitor_id);
               const transcribed = transcribedPostIds.has(row.post_id);
               return (
-                <tr key={row.post_id} className="border-b border-[var(--color-border)] last:border-b-0 hover:bg-[var(--color-bg-hover)]">
+                <tr key={row.post_id} className="border-b border-border last:border-b-0 hover:bg-surface-hover">
                   <td className="px-2 py-1.5">
-                    <span className="font-medium text-[var(--color-text)]">{competitor?.name ?? "—"}</span>
-                    <div className="text-[var(--color-text-faint)]">{competitor?.market} / {competitor?.tier}</div>
+                    <span className="font-medium text-text">{competitor?.name ?? "—"}</span>
+                    <div className="text-faint">{competitor?.market} / {competitor?.tier}</div>
                   </td>
-                  <td className="max-w-72 truncate px-2 py-1.5 text-[var(--color-text-dim)]">{post?.caption ?? "—"}</td>
+                  <td className="max-w-72 truncate px-2 py-1.5 text-dim">{post?.caption ?? "—"}</td>
                   <td className="px-2 py-1.5">{formatDate(row.posted_at)}</td>
                   <td className="px-2 py-1.5 text-right">{formatNumber(row.views)}</td>
                   <td className="px-2 py-1.5 text-right font-medium">{formatVpf(row.vpf)}</td>
-                  <td className="px-2 py-1.5 text-right text-[var(--color-text-dim)]">{formatVpf(row.baseline_median_vpf)}</td>
-                  <td className="px-2 py-1.5 text-right font-semibold text-[var(--color-brand)]">{formatScore(row.outlier_score)}</td>
+                  <td className="px-2 py-1.5 text-right text-dim">{formatVpf(row.baseline_median_vpf)}</td>
+                  <td className="px-2 py-1.5 text-right font-semibold text-brand">{formatScore(row.outlier_score)}</td>
                   <td className="px-2 py-1.5">
                     <Badge tone={transcribed ? "good" : "neutral"}>{transcribed ? "transcribed" : "pending"}</Badge>
                   </td>
                   <td className="px-2 py-1.5">
                     {post?.post_url && (
-                      <a href={post.post_url} target="_blank" rel="noreferrer" className="text-[var(--color-brand)] hover:underline">
+                      <a href={post.post_url} target="_blank" rel="noreferrer" className="text-brand hover:underline">
                         View →
                       </a>
                     )}

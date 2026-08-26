@@ -66,8 +66,8 @@ export default async function CompetitorDetailPage({
   return (
     <div className="p-4">
       <div className="mb-4">
-        <h1 className="text-sm font-semibold text-[var(--color-text)]">
-          {competitor.name} <span className="font-normal text-[var(--color-text-dim)]">@{competitor.handle}</span>
+        <h1 className="text-sm font-semibold text-text">
+          {competitor.name} <span className="font-normal text-dim">@{competitor.handle}</span>
         </h1>
         <div className="mt-1 flex flex-wrap items-center gap-2 text-xs">
           <Badge tone="brand">{competitor.tier}</Badge>
@@ -76,32 +76,32 @@ export default async function CompetitorDetailPage({
           <Badge tone={competitor.active ? "good" : "neutral"}>{competitor.active ? "active" : "inactive"}</Badge>
           <Badge tone={competitor.handle_verified ? "good" : "warn"}>{competitor.handle_verified ? "verified" : "unverified"}</Badge>
           {competitor.low_median_flag && <Badge tone="warn">low median</Badge>}
-          <span className="text-[var(--color-text-faint)]">band: {band.name}</span>
+          <span className="text-faint">band: {band.name}</span>
         </div>
       </div>
 
       <div className="mb-4 grid grid-cols-2 gap-4">
-        <div className="rounded border border-[var(--color-border)] p-3">
-          <h2 className="mb-2 text-xs font-semibold text-[var(--color-text-faint)]">Follower history</h2>
+        <div className="panel p-4">
+          <h2 className="mb-2 text-xs font-semibold text-faint">Follower history</h2>
           <FollowerChart points={chartPoints} />
         </div>
-        <div className="rounded border border-[var(--color-border)] p-3">
-          <h2 className="mb-2 text-xs font-semibold text-[var(--color-text-faint)]">Baseline</h2>
+        <div className="panel p-4">
+          <h2 className="mb-2 text-xs font-semibold text-faint">Baseline</h2>
           {baseline ? (
             <>
-              <p className="text-lg font-medium text-[var(--color-text)]">{formatVpf(baseline.baseline_median_vpf)} <span className="text-xs font-normal text-[var(--color-text-dim)]">median vpf</span></p>
-              <p className="text-xs text-[var(--color-text-dim)]">{baseline.posts_in_window} post(s) in the 90-day window</p>
+              <p className="text-lg font-medium text-text">{formatVpf(baseline.baseline_median_vpf)} <span className="text-xs font-normal text-dim">median vpf</span></p>
+              <p className="text-xs text-dim">{baseline.posts_in_window} post(s) in the 90-day window</p>
             </>
           ) : (
-            <p className="text-xs text-[var(--color-text-faint)]">No baseline yet -- needs 5+ video posts in the last 90 days.</p>
+            <p className="text-xs text-faint">No baseline yet -- needs 5+ video posts in the last 90 days.</p>
           )}
-          <p className="mt-2 text-xs text-[var(--color-text-dim)]">
-            Band: <span className="font-medium text-[var(--color-text)]">{band.name}</span> (min median vpf {band.minMedianVpf}, min outlier views {formatNumber(band.minOutlierViews)})
+          <p className="mt-2 text-xs text-dim">
+            Band: <span className="font-medium text-text">{band.name}</span> (min median vpf {band.minMedianVpf}, min outlier views {formatNumber(band.minOutlierViews)})
           </p>
         </div>
       </div>
 
-      <h2 className="mb-2 text-xs font-semibold text-[var(--color-text-faint)]">Posts ({postRows.length})</h2>
+      <h2 className="mb-2 text-xs font-semibold text-faint">Posts ({postRows.length})</h2>
       <SortablePostsTable posts={postRows} />
     </div>
   );

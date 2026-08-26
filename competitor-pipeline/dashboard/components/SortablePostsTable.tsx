@@ -59,15 +59,15 @@ export function SortablePostsTable({ posts }: { posts: PostRow[] }) {
   }
 
   return (
-    <div className="overflow-x-auto rounded border border-[var(--color-border)]">
+    <div className="overflow-x-auto panel">
       <table className="w-full border-collapse text-left text-xs">
         <thead>
-          <tr className="border-b border-[var(--color-border)] bg-[var(--color-bg-raised)] text-[var(--color-text-faint)]">
+          <tr className="border-b border-border bg-surface text-faint">
             <th className="px-2 py-1.5 font-medium">Type</th>
             {COLUMNS.map((col) => (
               <th
                 key={col.key}
-                className="cursor-pointer select-none px-2 py-1.5 text-right font-medium hover:text-[var(--color-text)]"
+                className="cursor-pointer select-none px-2 py-1.5 text-right font-medium hover:text-text"
                 onClick={() => onSort(col.key)}
               >
                 {col.label}
@@ -79,10 +79,10 @@ export function SortablePostsTable({ posts }: { posts: PostRow[] }) {
         </thead>
         <tbody>
           {sorted.map((p) => (
-            <tr key={p.post_id} className="border-b border-[var(--color-border)] last:border-b-0 hover:bg-[var(--color-bg-hover)]">
+            <tr key={p.post_id} className="border-b border-border last:border-b-0 hover:bg-surface-hover">
               <td className="px-2 py-1.5">
                 {p.post_url ? (
-                  <a href={p.post_url} target="_blank" rel="noreferrer" className="text-[var(--color-brand)] hover:underline">
+                  <a href={p.post_url} target="_blank" rel="noreferrer" className="text-brand hover:underline">
                     {p.post_type ?? "post"}
                   </a>
                 ) : (

@@ -44,37 +44,37 @@ export default async function StatusPage() {
 
   return (
     <div className="p-4">
-      <h1 className="mb-4 text-sm font-semibold text-[var(--color-text)]">Pipeline health</h1>
+      <h1 className="mb-4 text-sm font-semibold text-text">Pipeline health</h1>
 
       <div className="mb-4 grid grid-cols-3 gap-4">
-        <div className="rounded border border-[var(--color-border)] p-3">
-          <h2 className="mb-2 text-xs font-semibold text-[var(--color-text-faint)]">Roster by tier / market</h2>
-          <ul className="space-y-0.5 text-xs text-[var(--color-text-dim)]">
+        <div className="panel p-4">
+          <h2 className="mb-2 text-xs font-semibold text-faint">Roster by tier / market</h2>
+          <ul className="space-y-0.5 text-xs text-dim">
             {tierMarketKeys.map((k) => (
               <li key={k} className="flex justify-between">
                 <span>{k}</span>
-                <span className="font-medium text-[var(--color-text)]">{byTierMarket.get(k)}</span>
+                <span className="font-medium text-text">{byTierMarket.get(k)}</span>
               </li>
             ))}
           </ul>
         </div>
 
-        <div className="rounded border border-[var(--color-border)] p-3">
-          <h2 className="mb-2 text-xs font-semibold text-[var(--color-text-faint)]">Apify spend (month to date)</h2>
+        <div className="panel p-4">
+          <h2 className="mb-2 text-xs font-semibold text-faint">Apify spend (month to date)</h2>
           {spend === null ? (
-            <p className="text-xs text-[var(--color-text-faint)]">Spend unavailable -- APIFY_TOKEN not set.</p>
+            <p className="text-xs text-faint">Spend unavailable -- APIFY_TOKEN not set.</p>
           ) : MONTHLY_APIFY_SPEND_CAP_USD === null ? (
-            <p className="text-xs text-[var(--color-text-faint)]">
+            <p className="text-xs text-faint">
               ${spend.toFixed(2)} spent -- cap unavailable, MONTHLY_APIFY_SPEND_CAP_USD not set.
             </p>
           ) : (
             <>
-              <p className="mb-1 text-sm font-medium text-[var(--color-text)]">
+              <p className="mb-1 text-sm font-medium text-text">
                 ${spend.toFixed(2)} / ${MONTHLY_APIFY_SPEND_CAP_USD}
               </p>
-              <div className="h-2 w-full overflow-hidden rounded bg-[var(--color-bg)]">
+              <div className="h-2 w-full overflow-hidden rounded bg-bg">
                 <div
-                  className={`h-full ${spendPct! > 90 ? "bg-[var(--color-bad)]" : spendPct! > 70 ? "bg-[var(--color-warn)]" : "bg-[var(--color-brand)]"}`}
+                  className={`h-full transition-all ${spendPct! > 90 ? "bg-bad" : spendPct! > 70 ? "bg-warn" : "bg-brand"}`}
                   style={{ width: `${spendPct}%` }}
                 />
               </div>
@@ -82,22 +82,22 @@ export default async function StatusPage() {
           )}
         </div>
 
-        <div className="rounded border border-[var(--color-border)] p-3">
-          <h2 className="mb-2 text-xs font-semibold text-[var(--color-text-faint)]">Review queue</h2>
-          <Link href="/review" className="text-lg font-medium text-[var(--color-brand)] hover:underline">
+        <div className="panel p-4">
+          <h2 className="mb-2 text-xs font-semibold text-faint">Review queue</h2>
+          <Link href="/review" className="text-lg font-medium text-brand hover:underline">
             {pendingCount} pending
           </Link>
-          <p className="text-xs text-[var(--color-text-dim)]">awaiting shortlist review</p>
+          <p className="text-xs text-dim">awaiting shortlist review</p>
         </div>
       </div>
 
-      <div className="mb-4 rounded border border-[var(--color-border)] p-3">
-        <h2 className="mb-2 text-xs font-semibold text-[var(--color-text-faint)]">
-          Last harvest per active competitor {overdueRows.length > 0 && <span className="text-[var(--color-bad)]">({overdueRows.length} overdue)</span>}
+      <div className="mb-4 panel p-4">
+        <h2 className="mb-2 text-xs font-semibold text-faint">
+          Last harvest per active competitor {overdueRows.length > 0 && <span className="text-bad">({overdueRows.length} overdue)</span>}
         </h2>
         <table className="w-full border-collapse text-left text-xs">
           <thead>
-            <tr className="border-b border-[var(--color-border)] text-[var(--color-text-faint)]">
+            <tr className="border-b border-border text-faint">
               <th className="px-2 py-1 font-medium">Handle</th>
               <th className="px-2 py-1 font-medium">Tier / Market</th>
               <th className="px-2 py-1 font-medium">Last scraped</th>
@@ -109,14 +109,14 @@ export default async function StatusPage() {
               const overdue = isOverdue(r.last_scraped_at, r.tier, r.scrape_cadence);
               const since = daysSince(r.last_scraped_at);
               return (
-                <tr key={r.competitor_id} className="border-b border-[var(--color-border)] last:border-b-0">
+                <tr key={r.competitor_id} className="border-b border-border last:border-b-0">
                   <td className="px-2 py-1">
-                    <Link href={`/roster/${r.handle}`} className="text-[var(--color-brand)] hover:underline">
+                    <Link href={`/roster/${r.handle}`} className="text-brand hover:underline">
                       {r.handle}
                     </Link>
                   </td>
-                  <td className="px-2 py-1 text-[var(--color-text-dim)]">{r.tier} / {r.market}</td>
-                  <td className="px-2 py-1 text-[var(--color-text-dim)]">
+                  <td className="px-2 py-1 text-dim">{r.tier} / {r.market}</td>
+                  <td className="px-2 py-1 text-dim">
                     {formatDate(r.last_scraped_at)} {since !== null && `(${since}d ago, expects every ${expectedCadenceDays(r.tier, r.scrape_cadence)}d)`}
                   </td>
                   <td className="px-2 py-1">{overdue ? <Badge tone="bad">overdue</Badge> : <Badge tone="good">on track</Badge>}</td>
@@ -128,8 +128,8 @@ export default async function StatusPage() {
       </div>
 
       {lowMedianRows.length > 0 && (
-        <div className="rounded border border-[var(--color-border)] p-3">
-          <h2 className="mb-2 text-xs font-semibold text-[var(--color-text-faint)]">Flagged low_median_flag</h2>
+        <div className="panel p-4">
+          <h2 className="mb-2 text-xs font-semibold text-faint">Flagged low_median_flag</h2>
           <div className="flex flex-wrap gap-2">
             {lowMedianRows.map((r) => (
               <Link key={r.competitor_id} href={`/roster/${r.handle}`}>

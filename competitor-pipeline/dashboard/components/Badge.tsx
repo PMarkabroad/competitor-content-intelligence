@@ -1,14 +1,14 @@
 const TONES = {
-  neutral: "border-[var(--color-border)] text-[var(--color-text-dim)]",
-  good: "border-[var(--color-good)]/40 text-[var(--color-good)]",
-  warn: "border-[var(--color-warn)]/40 text-[var(--color-warn)]",
-  bad: "border-[var(--color-bad)]/40 text-[var(--color-bad)]",
-  brand: "border-[var(--color-brand)]/40 text-[var(--color-brand)]",
+  neutral: "bg-white/[0.06] text-dim",
+  good: "bg-good-soft text-good",
+  warn: "bg-warn-soft text-warn",
+  bad: "bg-bad-soft text-bad",
+  brand: "bg-brand-soft text-brand",
 } as const;
 
 export function Badge({ children, tone = "neutral" }: { children: React.ReactNode; tone?: keyof typeof TONES }) {
   return (
-    <span className={`inline-block rounded border px-1.5 py-0.5 text-[11px] leading-none whitespace-nowrap ${TONES[tone]}`}>
+    <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-medium leading-none whitespace-nowrap ${TONES[tone]}`}>
       {children}
     </span>
   );

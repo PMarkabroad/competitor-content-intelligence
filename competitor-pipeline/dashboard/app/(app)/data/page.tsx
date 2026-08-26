@@ -24,8 +24,8 @@ export default async function DataPage({
     <div className="p-4">
       <div className="mb-4 flex items-baseline justify-between">
         <div>
-          <h1 className="text-sm font-semibold text-[var(--color-text)]">Data browser</h1>
-          <p className="text-xs text-[var(--color-text-dim)]">Read-only. `raw` jsonb columns omitted (full actor payloads).</p>
+          <h1 className="text-sm font-semibold text-text">Data browser</h1>
+          <p className="text-xs text-dim">Read-only. `raw` jsonb columns omitted (full actor payloads).</p>
         </div>
         <div className="flex gap-1">
           {DATA_TABLES.map((t) => (
@@ -34,8 +34,8 @@ export default async function DataPage({
               href={`/data?table=${t.name}`}
               className={`rounded px-2 py-1 text-xs ${
                 t.name === config.name
-                  ? "bg-[var(--color-brand)] text-white"
-                  : "border border-[var(--color-border)] text-[var(--color-text-dim)] hover:bg-[var(--color-bg-hover)]"
+                  ? "bg-brand text-white"
+                  : "border border-border text-dim hover:bg-surface-hover"
               }`}
             >
               {t.name}

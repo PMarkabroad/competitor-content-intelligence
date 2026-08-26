@@ -3,17 +3,17 @@
 import { revalidatePath } from "next/cache";
 import { cookies } from "next/headers";
 import { getSupabaseServerClient } from "@/lib/supabase";
-import { getCurrentUser, APPROVED_COUNT_COOKIE } from "@/lib/auth";
+import { APPROVED_COUNT_COOKIE } from "@/lib/constants";
 
 export async function approveCandidate(formData: FormData) {
   const candidateId = String(formData.get("candidate_id") ?? "");
   const proposedTier = String(formData.get("proposed_tier") ?? "");
   const market = String(formData.get("market") ?? "");
-  if (!candidateId || !proposedTier || !market) {
-    throw new Error("candidate_id, proposed_tier and market are required to approve.");
+  const reviewedBy = String(formData.get("reviewed_by") ?? "").trim();
+  if (!candidateId || !proposedTier || !market || !reviewedBy) {
+    throw new Error("candidate_id, proposed_tier, market and your name are required to approve.");
   }
 
-  const reviewedBy = await getCurrentUser();
   const supabase = getSupabaseServerClient();
 
   const { data: candidate, error: fetchError } = await supabase
@@ -73,11 +73,11 @@ export async function approveCandidate(formData: FormData) {
 export async function rejectCandidate(formData: FormData) {
   const candidateId = String(formData.get("candidate_id") ?? "");
   const reason = String(formData.get("reason") ?? "").trim();
+  const reviewedBy = String(formData.get("reviewed_by") ?? "").trim() || "unknown";
   if (!candidateId || !reason) {
     throw new Error("candidate_id and a reason are required to reject.");
   }
 
-  const reviewedBy = await getCurrentUser();
   const supabase = getSupabaseServerClient();
 
   // Reuses gate_result='fail' rather than a new column -- a human

@@ -85,25 +85,25 @@ export function DataTable({ tableName, columns, rows }: { tableName: string; col
             setPage(0);
           }}
           placeholder="Filter (matches any column)..."
-          className="w-64 rounded border border-[var(--color-border)] bg-[var(--color-bg-raised)] px-2 py-1 text-xs text-[var(--color-text)] outline-none focus:border-[var(--color-brand)]"
+          className="w-64 rounded border border-border bg-surface px-2 py-1 text-xs text-text outline-none focus:border-brand"
         />
         <div className="flex items-center gap-2">
-          <span className="text-xs text-[var(--color-text-dim)]">{sorted.length} row(s)</span>
-          <button onClick={exportCsv} className="rounded border border-[var(--color-border)] px-2 py-1 text-xs text-[var(--color-text-dim)] hover:bg-[var(--color-bg-hover)] hover:text-[var(--color-text)]">
+          <span className="text-xs text-dim">{sorted.length} row(s)</span>
+          <button onClick={exportCsv} className="rounded border border-border px-2 py-1 text-xs text-dim hover:bg-surface-hover hover:text-text">
             Export CSV
           </button>
         </div>
       </div>
 
-      <div className="overflow-x-auto rounded border border-[var(--color-border)]">
+      <div className="overflow-x-auto panel">
         <table className="w-full border-collapse text-left text-xs">
           <thead>
-            <tr className="border-b border-[var(--color-border)] bg-[var(--color-bg-raised)] text-[var(--color-text-faint)]">
+            <tr className="border-b border-border bg-surface text-faint">
               {columns.map((col) => (
                 <th
                   key={col}
                   onClick={() => onSort(col)}
-                  className="cursor-pointer select-none whitespace-nowrap px-2 py-1.5 font-medium hover:text-[var(--color-text)]"
+                  className="cursor-pointer select-none whitespace-nowrap px-2 py-1.5 font-medium hover:text-text"
                 >
                   {col}
                   {sortCol === col ? (sortDesc ? " ↓" : " ↑") : ""}
@@ -113,9 +113,9 @@ export function DataTable({ tableName, columns, rows }: { tableName: string; col
           </thead>
           <tbody>
             {pageRows.map((row, i) => (
-              <tr key={i} className="border-b border-[var(--color-border)] last:border-b-0 hover:bg-[var(--color-bg-hover)]">
+              <tr key={i} className="border-b border-border last:border-b-0 hover:bg-surface-hover">
                 {columns.map((col) => (
-                  <td key={col} className="max-w-64 truncate px-2 py-1.5 text-[var(--color-text-dim)]" title={cellToString(row[col])}>
+                  <td key={col} className="max-w-64 truncate px-2 py-1.5 text-dim" title={cellToString(row[col])}>
                     {cellToString(row[col]) || "—"}
                   </td>
                 ))}
@@ -125,7 +125,7 @@ export function DataTable({ tableName, columns, rows }: { tableName: string; col
         </table>
       </div>
 
-      <div className="mt-2 flex items-center justify-between text-xs text-[var(--color-text-dim)]">
+      <div className="mt-2 flex items-center justify-between text-xs text-dim">
         <span>
           Page {page + 1} of {totalPages}
         </span>
@@ -133,14 +133,14 @@ export function DataTable({ tableName, columns, rows }: { tableName: string; col
           <button
             onClick={() => setPage((p) => Math.max(0, p - 1))}
             disabled={page === 0}
-            className="rounded border border-[var(--color-border)] px-2 py-1 disabled:opacity-30"
+            className="rounded border border-border px-2 py-1 disabled:opacity-30"
           >
             Prev
           </button>
           <button
             onClick={() => setPage((p) => Math.min(totalPages - 1, p + 1))}
             disabled={page >= totalPages - 1}
-            className="rounded border border-[var(--color-border)] px-2 py-1 disabled:opacity-30"
+            className="rounded border border-border px-2 py-1 disabled:opacity-30"
           >
             Next
           </button>

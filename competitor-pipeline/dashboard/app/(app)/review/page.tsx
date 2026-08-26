@@ -1,9 +1,11 @@
 import { cookies } from "next/headers";
 import { getSupabaseServerClient } from "@/lib/supabase";
 import { Badge } from "@/components/Badge";
+import { ReviewerNameInput } from "@/components/ReviewerName";
+import { RowActions } from "@/components/RowActions";
 import { formatNumber, formatVpf, formatDate } from "@/lib/format";
 import { approveCandidate, rejectCandidate } from "./actions";
-import { APPROVED_COUNT_COOKIE } from "@/lib/auth";
+import { APPROVED_COUNT_COOKIE } from "@/lib/constants";
 
 // Explicit even though searchParams usage already forces dynamic
 // rendering here -- consistent with every other data page, so this
@@ -29,7 +31,6 @@ interface DiscoveryCandidate {
 }
 
 const EXCLUDED_CLASSIFICATIONS = ["irrelevant", "regulated"];
-const TIERS = ["T1", "T2", "T3"];
 const MARKETS = ["AU", "US", "CA"];
 
 function profileUrl(row: DiscoveryCandidate): string {
@@ -76,40 +77,43 @@ export default async function ReviewPage({
     <div className="p-4">
       <div className="mb-4 flex items-baseline justify-between">
         <div>
-          <h1 className="text-sm font-semibold text-[var(--color-text)]">Shortlist review</h1>
-          <p className="text-xs text-[var(--color-text-dim)]">
+          <h1 className="text-sm font-semibold text-text">Shortlist review</h1>
+          <p className="text-xs text-dim">
             {visibleRows.length} pending · {approvedThisSession} approved this session
             {excludedCount > 0 && !showExcluded ? ` · ${excludedCount} excluded (irrelevant/regulated) hidden` : ""}
           </p>
         </div>
-        <form method="get" className="flex items-center gap-2">
-          <select name="market" defaultValue={params.market ?? ""} className="rounded border border-[var(--color-border)] bg-[var(--color-bg-raised)] px-2 py-1 text-xs text-[var(--color-text)]">
-            <option value="">All markets</option>
-            {MARKETS.map((m) => (
-              <option key={m} value={m}>{m}</option>
-            ))}
-          </select>
-          <select name="classification" defaultValue={params.classification ?? ""} className="rounded border border-[var(--color-border)] bg-[var(--color-bg-raised)] px-2 py-1 text-xs text-[var(--color-text)]">
-            <option value="">All classifications</option>
-            <option value="career_coach">career_coach</option>
-            <option value="adjacent">adjacent</option>
-            <option value="irrelevant">irrelevant</option>
-            <option value="regulated">regulated</option>
-          </select>
-          <label className="flex items-center gap-1 text-xs text-[var(--color-text-dim)]">
-            <input type="checkbox" name="showExcluded" value="1" defaultChecked={showExcluded} />
-            Show excluded
-          </label>
-          <button type="submit" className="rounded bg-[var(--color-brand)] px-3 py-1 text-xs font-medium text-white hover:opacity-90">
-            Apply
-          </button>
-        </form>
+        <div className="flex items-center gap-3">
+          <ReviewerNameInput />
+          <form method="get" className="flex items-center gap-2">
+            <select name="market" defaultValue={params.market ?? ""} className="rounded-md border border-border bg-surface px-2 py-1.5 text-xs text-text">
+              <option value="">All markets</option>
+              {MARKETS.map((m) => (
+                <option key={m} value={m}>{m}</option>
+              ))}
+            </select>
+            <select name="classification" defaultValue={params.classification ?? ""} className="rounded-md border border-border bg-surface px-2 py-1.5 text-xs text-text">
+              <option value="">All classifications</option>
+              <option value="career_coach">career_coach</option>
+              <option value="adjacent">adjacent</option>
+              <option value="irrelevant">irrelevant</option>
+              <option value="regulated">regulated</option>
+            </select>
+            <label className="flex items-center gap-1.5 text-xs text-dim">
+              <input type="checkbox" name="showExcluded" value="1" defaultChecked={showExcluded} />
+              Show excluded
+            </label>
+            <button type="submit" className="rounded-md bg-brand px-3 py-1.5 text-xs font-medium text-white transition-opacity hover:opacity-90">
+              Apply
+            </button>
+          </form>
+        </div>
       </div>
 
-      <div className="overflow-x-auto rounded border border-[var(--color-border)]">
+      <div className="overflow-x-auto panel">
         <table className="w-full border-collapse text-left text-xs">
           <thead>
-            <tr className="border-b border-[var(--color-border)] bg-[var(--color-bg-raised)] text-[var(--color-text-faint)]">
+            <tr className="border-b border-border bg-surface text-faint">
               <th className="px-2 py-2 font-medium">Handle</th>
               <th className="px-2 py-2 font-medium">Bio</th>
               <th className="px-2 py-2 font-medium text-right">Followers</th>
@@ -120,8 +124,7 @@ export default async function ReviewPage({
               <th className="px-2 py-2 font-medium">Last post</th>
               <th className="px-2 py-2 font-medium">Classification</th>
               <th className="px-2 py-2 font-medium">Found via</th>
-              <th className="px-2 py-2 font-medium">Approve</th>
-              <th className="px-2 py-2 font-medium">Reject</th>
+              <th className="px-2 py-2 font-medium">Actions</th>
             </tr>
           </thead>
           <tbody>
@@ -130,15 +133,15 @@ export default async function ReviewPage({
               return (
                 <tr
                   key={row.candidate_id}
-                  className={`border-b border-[var(--color-border)] align-top hover:bg-[var(--color-bg-hover)] ${isExcluded ? "opacity-40" : ""}`}
+                  className={`border-b border-border align-top hover:bg-surface-hover ${isExcluded ? "opacity-40" : ""}`}
                 >
                   <td className="px-2 py-2">
-                    <a href={profileUrl(row)} target="_blank" rel="noreferrer" className="font-medium text-[var(--color-brand)] hover:underline">
+                    <a href={profileUrl(row)} target="_blank" rel="noreferrer" className="font-medium text-brand hover:underline">
                       {row.handle}
                     </a>
-                    <div className="text-[var(--color-text-faint)]">{row.display_name}</div>
+                    <div className="text-faint">{row.display_name}</div>
                   </td>
-                  <td className="max-w-64 px-2 py-2 text-[var(--color-text-dim)]">{row.bio}</td>
+                  <td className="max-w-64 px-2 py-2 text-dim">{row.bio}</td>
                   <td className="px-2 py-2 text-right">{formatNumber(row.followers)}</td>
                   <td className="px-2 py-2">{row.market_guess}</td>
                   <td className="px-2 py-2 text-right">{row.video_posts_90d ?? "—"}</td>
@@ -150,47 +153,19 @@ export default async function ReviewPage({
                       {row.classification ?? "unclassified"}
                     </Badge>
                     {row.classification === "regulated" && (
-                      <div className="mt-1 text-[10px] text-[var(--color-bad)]">DB constraint refuses promotion.</div>
+                      <div className="mt-1 text-[10px] text-bad">DB constraint refuses promotion.</div>
                     )}
-                    <div className="mt-1 text-[var(--color-text-faint)]">{row.classification_reason}</div>
+                    <div className="mt-1 text-faint">{row.classification_reason}</div>
                   </td>
-                  <td className="max-w-40 px-2 py-2 text-[var(--color-text-dim)]">{row.found_via}</td>
+                  <td className="max-w-40 px-2 py-2 text-dim">{row.found_via}</td>
                   <td className="px-2 py-2">
-                    <form action={approveCandidate} className="flex flex-col gap-1">
-                      <input type="hidden" name="candidate_id" value={row.candidate_id} />
-                      <select name="proposed_tier" defaultValue="T2" className="rounded border border-[var(--color-border)] bg-[var(--color-bg)] px-1 py-0.5 text-[11px] text-[var(--color-text)]">
-                        {TIERS.map((t) => (
-                          <option key={t} value={t}>{t}</option>
-                        ))}
-                      </select>
-                      <select name="market" defaultValue={row.market_guess ?? "AU"} className="rounded border border-[var(--color-border)] bg-[var(--color-bg)] px-1 py-0.5 text-[11px] text-[var(--color-text)]">
-                        {MARKETS.map((m) => (
-                          <option key={m} value={m}>{m}</option>
-                        ))}
-                      </select>
-                      <button
-                        type="submit"
-                        disabled={row.classification === "regulated"}
-                        className="rounded bg-[var(--color-good)] px-2 py-0.5 text-[11px] font-medium text-black disabled:cursor-not-allowed disabled:opacity-30"
-                      >
-                        Approve
-                      </button>
-                    </form>
-                  </td>
-                  <td className="px-2 py-2">
-                    <form action={rejectCandidate} className="flex flex-col gap-1">
-                      <input type="hidden" name="candidate_id" value={row.candidate_id} />
-                      <input
-                        type="text"
-                        name="reason"
-                        required
-                        placeholder="Reason"
-                        className="w-28 rounded border border-[var(--color-border)] bg-[var(--color-bg)] px-1 py-0.5 text-[11px] text-[var(--color-text)]"
-                      />
-                      <button type="submit" className="rounded bg-[var(--color-bad)] px-2 py-0.5 text-[11px] font-medium text-white">
-                        Reject
-                      </button>
-                    </form>
+                    <RowActions
+                      candidateId={row.candidate_id}
+                      defaultMarket={row.market_guess ?? "AU"}
+                      disabledApprove={row.classification === "regulated"}
+                      approveAction={approveCandidate}
+                      rejectAction={rejectCandidate}
+                    />
                   </td>
                 </tr>
               );

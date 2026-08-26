@@ -72,8 +72,8 @@ export default async function RosterPage() {
 
   return (
     <div className="p-4">
-      <h1 className="mb-1 text-sm font-semibold text-[var(--color-text)]">Roster</h1>
-      <p className="mb-4 text-xs text-[var(--color-text-dim)]">{rows.length} competitor(s), grouped by tier and market.</p>
+      <h1 className="mb-1 text-sm font-semibold text-text">Roster</h1>
+      <p className="mb-4 text-xs text-dim">{rows.length} competitor(s), grouped by tier and market.</p>
 
       {TIERS.map((tier) => {
         const tierRows = rows.filter((r) => r.tier === tier);
@@ -82,16 +82,16 @@ export default async function RosterPage() {
 
         return (
           <div key={tier} className="mb-6">
-            <h2 className="mb-2 text-xs font-semibold uppercase tracking-wide text-[var(--color-text-faint)]">
-              {tier} <span className="normal-case text-[var(--color-text-dim)]">({tierRows.length})</span>
+            <h2 className="mb-2 text-xs font-semibold uppercase tracking-wide text-faint">
+              {tier} <span className="normal-case text-dim">({tierRows.length})</span>
             </h2>
             {markets.map((market) => {
               const marketRows = tierRows.filter((r) => r.market === market);
               return (
-                <div key={market} className="mb-3 overflow-x-auto rounded border border-[var(--color-border)]">
+                <div key={market} className="mb-3 overflow-x-auto panel">
                   <table className="w-full border-collapse text-left text-xs">
                     <thead>
-                      <tr className="border-b border-[var(--color-border)] bg-[var(--color-bg-raised)] text-[var(--color-text-faint)]">
+                      <tr className="border-b border-border bg-surface text-faint">
                         <th className="px-2 py-1.5 font-medium">{market}</th>
                         <th className="px-2 py-1.5 font-medium">Platform</th>
                         <th className="px-2 py-1.5 font-medium text-right">Followers</th>
@@ -107,14 +107,14 @@ export default async function RosterPage() {
                         const overdue = row.active && isOverdue(row.last_scraped_at, row.tier, row.scrape_cadence);
                         const since = daysSince(row.last_scraped_at);
                         return (
-                          <tr key={row.competitor_id} className="border-b border-[var(--color-border)] last:border-b-0 hover:bg-[var(--color-bg-hover)]">
+                          <tr key={row.competitor_id} className="border-b border-border last:border-b-0 hover:bg-surface-hover">
                             <td className="px-2 py-1.5">
-                              <Link href={`/roster/${row.handle}`} className="font-medium text-[var(--color-brand)] hover:underline">
+                              <Link href={`/roster/${row.handle}`} className="font-medium text-brand hover:underline">
                                 {row.handle}
                               </Link>
-                              <div className="text-[var(--color-text-faint)]">{row.name}</div>
+                              <div className="text-faint">{row.name}</div>
                             </td>
-                            <td className="px-2 py-1.5 text-[var(--color-text-dim)]">{row.platform}</td>
+                            <td className="px-2 py-1.5 text-dim">{row.platform}</td>
                             <td className="px-2 py-1.5 text-right">{formatNumber(followersByCompetitor.get(row.competitor_id))}</td>
                             <td className="px-2 py-1.5">
                               <Badge tone={row.active ? "good" : "neutral"}>{row.active ? "active" : "inactive"}</Badge>
@@ -124,7 +124,7 @@ export default async function RosterPage() {
                             </td>
                             <td className="px-2 py-1.5">{row.low_median_flag && <Badge tone="warn">low median</Badge>}</td>
                             <td className="px-2 py-1.5">
-                              <span className={overdue ? "text-[var(--color-bad)]" : "text-[var(--color-text-dim)]"}>
+                              <span className={overdue ? "text-bad" : "text-dim"}>
                                 {formatDate(row.last_scraped_at)}
                                 {row.active && (
                                   <span className="ml-1 text-[10px]">
