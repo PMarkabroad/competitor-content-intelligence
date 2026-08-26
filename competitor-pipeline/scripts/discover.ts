@@ -373,10 +373,19 @@ Classify each account into exactly one of:
 
 Respond with ONLY a JSON array, no markdown fences, no preamble: [{"handle": "...", "classification": "career_coach|adjacent|irrelevant|regulated", "reason": "one short sentence"}, ...] -- one object per account, in the order given.`;
 
+  // Scraped bios/captions occasionally contain a lone (unpaired) UTF-16
+  // surrogate -- usually a mangled emoji from the source scraper. JSON.stringify
+  // happily emits it, but the resulting bytes aren't valid UTF-8 and the
+  // Anthropic API's JSON parser rejects the whole request body with "no low
+  // surrogate in string", silently dropping every candidate in that batch.
+  // Strip unpaired surrogates before building the request.
+  const sanitize = (s: string) =>
+    s.replace(/[\uD800-\uDBFF](?![\uDC00-\uDFFF])/g, "").replace(/(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/g, "");
+
   const userContent = candidates
     .map(
       (c, i) =>
-        `${i + 1}. handle: ${c.handle}\nbio: ${c.bio ?? "(none)"}\nrecent captions: ${(c.recent_captions ?? []).map((cap) => `"${cap.slice(0, 200)}"`).join(" | ") || "(none)"}`
+        `${i + 1}. handle: ${c.handle}\nbio: ${sanitize(c.bio ?? "(none)")}\nrecent captions: ${(c.recent_captions ?? []).map((cap) => `"${sanitize(cap.slice(0, 200))}"`).join(" | ") || "(none)"}`
     )
     .join("\n\n");
 
