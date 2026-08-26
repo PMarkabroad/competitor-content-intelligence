@@ -59,6 +59,14 @@ export const DATA_TABLES: TableConfig[] = [
     ],
     defaultSort: "tagged_at",
   },
+  {
+    // `content` (the full report markdown) is omitted here, same reason
+    // `raw` is omitted elsewhere -- a full report body doesn't belong in
+    // a row-per-line browser. Read it properly on /reports.
+    name: "hook_reports",
+    columns: ["report_id", "title", "generated_at"],
+    defaultSort: "generated_at",
+  },
 ];
 
 export function getTableConfig(name: string | undefined): TableConfig {

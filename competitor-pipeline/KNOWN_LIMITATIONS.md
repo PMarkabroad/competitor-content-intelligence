@@ -31,3 +31,37 @@ value, suggesting this was anticipated but never wired up end-to-end).
 If Wonsulting-style carousel-first accounts become common in the T2/T3
 roster, this is worth revisiting before it silently biases the hook corpus
 toward whichever accounts happen to favor video.
+
+## `topic_slug` still contains `visa-time-pressure` and `visa-pr-blocker` -- keep them
+
+Migration 001's `topic_slug` CHECK constraint has two visa-related values.
+This looks like it contradicts the pipeline's own rule against migration
+advice (`regulated` accounts are hard-blocked at the DB level, migration
+009) and it was flagged as a possible inconsistency when migration 012
+extended `hook_pattern` (2026-08-26).
+
+**It isn't a contradiction, and it's deliberate.** These two values tag
+what the *audience* is anxious about -- visa timing pressure, PR as a
+blocker to career decisions -- not what the *content* recommends doing
+about it. A hook can be tagged `visa-time-pressure` and still pass
+`brand_fit` cleanly, so long as it doesn't cross into telling someone what
+to do about their visa (that's what `brand_fit`/the `regulated` lock
+actually gate). Tracking the pain point is market research; dispensing
+migration advice is the regulated activity. Those are different axes, and
+collapsing them would throw away real signal about what this audience is
+actually stressed about, which is exactly the kind of thing a hook corpus
+should be able to say.
+
+`reference/arkabroad-voice.md`'s `brand_fit` check is what actually
+enforces the "never gives migration advice" rule at the content level, not
+`topic_slug`. Don't remove these two values from the constraint, and don't
+add a third by generalizing them into a broader `migration` category --
+the taxonomy stays exactly as scoped: audience pain points that happen to
+be visa-related are fine to tag; a hook that itself advises on visa/PR
+status is what `brand_fit`/`regulated` exist to catch, and always will,
+regardless of this constraint. (New tagging via the dashboard's
+`/reels/[post_id]` form deliberately excludes both values from its
+dropdown anyway -- not because they're wrong to use, but because the
+form's own topic list was scoped down to the taxonomy's non-visa values on
+the same 2026-08-26 pass, to keep new tagging from casually reaching for
+them without the context in this note.)
