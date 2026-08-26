@@ -1,19 +1,20 @@
 /**
  * One-off: the --profile run's HTTP request timed out client-side (Node's
  * undici headers timeout, ~5min) but the Apify run kept going server-side
- * and succeeded, billing $1.563. Rather than losing that paid-for data and
- * re-running (another ~$1.6), pull the completed dataset directly and run
- * the exact same post-processing stageProfile() would have run on it.
+ * and succeeded, billing real money. Rather than losing that paid-for data
+ * and re-running (paying twice), pull the completed dataset directly and
+ * run the exact same post-processing stageProfile() would have run on it.
  *
- * Dataset/run confirmed via GET /v2/actor-runs and /v2/datasets/{id} to be
- * this exact profile run: clockworks/tiktok-profile-scraper, SUCCEEDED,
- * 521 items, started 2026-08-26T05:09:10Z.
+ * DATASET_ID must be set to the salvage target's defaultDatasetId (from
+ * GET /v2/actor-runs/{runId}) before running. Used twice this session so
+ * far: 2026-08-26 AU run (dataset Pbt7kLIJpjftaMN3a) and the US run
+ * (dataset GdaULJMB5Ahprx9I1) -- update the constant per use.
  */
 import "dotenv/config";
 import { config } from "../config.ts";
 import { getSupabaseClient } from "./lib/supabaseClient.ts";
 
-const DATASET_ID = "Pbt7kLIJpjftaMN3a";
+const DATASET_ID = "GdaULJMB5Ahprx9I1";
 
 async function main() {
   const apifyToken = process.env.APIFY_TOKEN;
