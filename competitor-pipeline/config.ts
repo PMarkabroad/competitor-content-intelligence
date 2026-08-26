@@ -286,16 +286,19 @@ export const config = {
   // Set to 15 on 2026-08-26 after the real org account (arkabroad, plan
   // STARTER/tier BRONZE) was confirmed: real ceiling is $29/month, but
   // that's the plan's included compute, not a hard wall -- Apify bills
-  // overage above it. $15 is a deliberate buffer well under $29, not a
-  // notch-below-ceiling number: with no usage history yet, it caps how
-  // much rope a runaway run gets before this guard trips, while still
-  // covering the full remaining plan for this cycle (finish AU, full US
-  // sweep, Canada once handles land, a month of harvest + transcription
-  // -- estimated ~$11-13 total). Raise once real monthly consumption is
-  // known. Superseded the FREE-tier ($5 ceiling) reasoning below, which
-  // itself was checked against the wrong account (see the CORRECTION
-  // note above) -- kept only as a record of that history, not current.
-  MONTHLY_APIFY_SPEND_CAP_USD: 15,
+  // overage above it. $15 was a deliberate buffer set with no usage
+  // history at all. Raised to 25 on 2026-08-26 after one full cycle of
+  // real consumption: three complete market discovery sweeps (AU, US,
+  // CA -- search/profile/classify/gate/shortlist each) plus testing
+  // came to ~$14, right up against the old $15 cap with nothing left
+  // for harvesting or transcription. $25 is a $4 buffer under the real
+  // $29 ceiling -- enough room for a full sweep-equivalent cycle plus
+  // ongoing harvest/transcription, while the guard still fires before
+  // the real platform wall would. Superseded the FREE-tier ($5 ceiling)
+  // reasoning further below, which was checked against the wrong
+  // account (see the CORRECTION note above) -- kept only as a record of
+  // that history, not current.
+  MONTHLY_APIFY_SPEND_CAP_USD: 25,
 
   /**
    * Per-item cost estimates used only for the spend-guard check, not
