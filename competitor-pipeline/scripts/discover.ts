@@ -251,8 +251,20 @@ async function stageProfile(apifyToken: string, confirmed: boolean) {
     return;
   }
 
+  // resultsPerPage=3, not 1: it's still one Apify call per handle, but
+  // that call returns 3 billable dataset items (this actor prices per
+  // result, not per call) -- 1 item's worth of author metadata for the
+  // followers/is_private gates, plus 2 extra items purely to give
+  // --classify 3 captions to read. Split out below so the cost line names
+  // what it's actually paying for, not one undifferentiated "profile" fee.
   const PROFILE_RESULTS_PER_PAGE = 3;
-  const estimateUsd = Math.max(0.01, pending.length * PROFILE_RESULTS_PER_PAGE * 0.003 + 0.001);
+  const baseProfileUsd = pending.length * 1 * 0.003;
+  const classifyCaptionsUsd = pending.length * (PROFILE_RESULTS_PER_PAGE - 1) * 0.003;
+  const estimateUsd = Math.max(0.01, baseProfileUsd + classifyCaptionsUsd + 0.001);
+  console.log(
+    `  (base profile, 1 result/candidate: $${baseProfileUsd.toFixed(4)}; ` +
+      `+${PROFILE_RESULTS_PER_PAGE - 1} extra results/candidate for --classify captions: $${classifyCaptionsUsd.toFixed(4)})`
+  );
   if (!costGate("profile", estimateUsd, confirmed)) return;
 
   const items = await runApifyActor(
@@ -368,10 +380,16 @@ Respond with ONLY a JSON array, no markdown fences, no preamble: [{"handle": "..
     )
     .join("\n\n");
 
+  // claude-haiku-4-5, not claude-opus-5 -- deliberate for this task: four-
+  // bucket bio+caption classification is a bulk, well-defined job we pay
+  // for per-candidate, not generated code (where the "always Opus" rule
+  // applies). Haiku 4.5 is an older-tier model in the Anthropic API sense:
+  // it doesn't support output_config.effort or adaptive thinking (both
+  // error on this model), so neither is set here -- this is a plain,
+  // no-thinking classification call.
   const response = await anthropic.messages.create({
-    model: "claude-opus-5",
+    model: "claude-haiku-4-5",
     max_tokens: 4000,
-    output_config: { effort: "low" },
     system,
     messages: [{ role: "user", content: userContent }],
   });
