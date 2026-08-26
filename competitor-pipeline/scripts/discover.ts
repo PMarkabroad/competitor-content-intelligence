@@ -161,7 +161,11 @@ async function stageSearch(apifyToken: string, limit: Market | undefined, confir
   const queries = markets.flatMap((m) => seedQueries[m].map((q) => ({ market: m, query: q })));
 
   const estimatedResults = queries.length * config.DISCOVERY_SEARCH_RESULTS_PER_QUERY;
-  const estimateUsd = Math.max(0.5, estimatedResults * 0.0037 + 0.001);
+  // 0.003/result is BRONZE-tier pricing for clockworks/tiktok-scraper's
+  // "result" event (was 0.0037 at FREE, updated 2026-08-26 for the real
+  // org account's plan tier -- see config.ts's ESTIMATED_COST_PER_*_USD
+  // comment for how this was confirmed).
+  const estimateUsd = Math.max(0.5, estimatedResults * 0.003 + 0.001);
   if (!costGate("search", estimateUsd, confirmed)) return;
 
   const supabase = getSupabaseClient();
@@ -258,8 +262,11 @@ async function stageProfile(apifyToken: string, confirmed: boolean) {
   // --classify 3 captions to read. Split out below so the cost line names
   // what it's actually paying for, not one undifferentiated "profile" fee.
   const PROFILE_RESULTS_PER_PAGE = 3;
-  const baseProfileUsd = pending.length * 1 * 0.003;
-  const classifyCaptionsUsd = pending.length * (PROFILE_RESULTS_PER_PAGE - 1) * 0.003;
+  // 0.002/result is BRONZE-tier pricing for clockworks/tiktok-profile-
+  // scraper's "result" event (was 0.003 at FREE, updated 2026-08-26 --
+  // see the search-stage estimate above for the same update).
+  const baseProfileUsd = pending.length * 1 * 0.002;
+  const classifyCaptionsUsd = pending.length * (PROFILE_RESULTS_PER_PAGE - 1) * 0.002;
   const estimateUsd = Math.max(0.01, baseProfileUsd + classifyCaptionsUsd + 0.001);
   console.log(
     `  (base profile, 1 result/candidate: $${baseProfileUsd.toFixed(4)}; ` +
@@ -554,7 +561,9 @@ async function stageGate(apifyToken: string, limit: Market | undefined, confirme
   }
 
   const estimatedResults = pending.length * config.DISCOVERY_GATE_MAX_POSTS_PER_CANDIDATE;
-  const estimateUsd = Math.max(0.5, estimatedResults * 0.0037 + 0.001);
+  // 0.003/result BRONZE, same clockworks/tiktok-scraper "result" event
+  // as the search-stage estimate above (updated 2026-08-26).
+  const estimateUsd = Math.max(0.5, estimatedResults * 0.003 + 0.001);
   if (!costGate("gate", estimateUsd, confirmed)) return;
 
   const items = await runApifyActor(

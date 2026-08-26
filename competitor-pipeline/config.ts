@@ -249,8 +249,28 @@ export const config = {
    * run). Search $1.67 + profile $0.54 + gate $3.33 = ~$5.54 total, down
    * from the original ~$8.87 estimate for the same R=10 breadth.
    *
-   * IMPORTANT: the account switched from personal to an organizational
-   * Apify account on 2026-08-26 -- still FREE tier, still a real $5/month
+   * CORRECTION (2026-08-26, later same day): the "org account" check
+   * recorded below never actually ran against the org account. .env held
+   * the PERSONAL account's token (arkabroad-owner) the entire time --
+   * the 2026-08-26 "switch to organizational" was believed but not
+   * actually wired up. GET /v2/users/me against arkabroad-owner
+   * genuinely does show tier FREE / maxMonthlyUsageUsd 5 (that part
+   * wasn't wrong), it just wasn't the org account. The real org account
+   * (arkabroad, isPaying:true) is plan STARTER / tier BRONZE /
+   * maxMonthlyUsageUsd $29, confirmed via GET /v2/users/me after .env
+   * was corrected to the actual org token. This value is still 4
+   * (FREE-tier-calibrated) pending explicit confirmation of a new number
+   * -- do not assume $4 is still appropriate for a $29 ceiling.
+   *
+   * Original reasoning preserved below for the cost-estimate math, which
+   * is still FREE-tier pricing and now a conservative overestimate (the
+   * org account's BRONZE tier prices several Apify actors slightly lower
+   * per unit than FREE -- e.g. clockworks/tiktok-transcript-extractor's
+   * Video charge is $0.0037 at FREE vs $0.003 at BRONZE). Safe direction
+   * (real costs come in under estimate), not re-derived here.
+   *
+   * the account switched from personal to an organizational Apify
+   * account on 2026-08-26 -- still FREE tier, still a real $5/month
    * platform ceiling (confirmed via GET /v2/users/me against the org
    * account: tier FREE, maxMonthlyUsageUsd 5). The org switch did not
    * raise the real ceiling. Reverted this value to $4 (a notch below $5,
@@ -263,22 +283,42 @@ export const config = {
    * (--limit, --sample) and expect to spread a full sweep across cycles,
    * or upgrade the Apify plan and raise this deliberately.
    */
-  MONTHLY_APIFY_SPEND_CAP_USD: 4,
+  // Set to 15 on 2026-08-26 after the real org account (arkabroad, plan
+  // STARTER/tier BRONZE) was confirmed: real ceiling is $29/month, but
+  // that's the plan's included compute, not a hard wall -- Apify bills
+  // overage above it. $15 is a deliberate buffer well under $29, not a
+  // notch-below-ceiling number: with no usage history yet, it caps how
+  // much rope a runaway run gets before this guard trips, while still
+  // covering the full remaining plan for this cycle (finish AU, full US
+  // sweep, Canada once handles land, a month of harvest + transcription
+  // -- estimated ~$11-13 total). Raise once real monthly consumption is
+  // known. Superseded the FREE-tier ($5 ceiling) reasoning below, which
+  // itself was checked against the wrong account (see the CORRECTION
+  // note above) -- kept only as a record of that history, not current.
+  MONTHLY_APIFY_SPEND_CAP_USD: 15,
 
   /**
    * Per-item cost estimates used only for the spend-guard check, not
-   * billing. Sourced from real Apify pricing (FREE tier) confirmed via the
-   * API on 2026-08-25, not guessed: profile $0.0026/call
-   * (apify/instagram-profile-scraper), post $0.0027/post
-   * (apify/instagram-post-scraper, detailedData -- required, see
-   * apify/actors.json), transcript ~$0.05 for a ~1-minute reel
-   * (apify/instagram-reel-scraper, $0.048/started-minute + a small base
-   * reel charge -- actual cost scales with reel length, this is a rough
-   * per-transcript planning figure, not a formula).
+   * billing. Updated 2026-08-26 to BRONZE-tier pricing (the real org
+   * account's tier) via GET /v2/acts/<id> pricingInfos, confirmed real,
+   * not guessed: profile $0.0023/call (apify/instagram-profile-scraper,
+   * BRONZE "profile" event), post $0.0023/post (apify/instagram-post-scraper,
+   * detailedData -- required, see apify/actors.json -- BRONZE "post"
+   * $0.0015 + "post-details" $0.0008), transcript ~$0.044 for a
+   * ~1-minute reel (apify/instagram-reel-scraper, BRONZE "transcript"
+   * add-on $0.041/started-minute + a small base reel charge -- actual
+   * cost scales with reel length, this is a rough per-transcript
+   * planning figure, not a formula; a TikTok outlier's transcript is
+   * usually far cheaper via DOWNLOAD_SUBTITLES on the pinned
+   * tiktokTranscript actor instead, see its actors.json comment).
+   * Previously FREE-tier calibrated (profile $0.0026, post $0.0027,
+   * transcript ~$0.05) -- BRONZE runs ~10-15% cheaper per unit on these
+   * actors, so the old numbers were a safe (over-, not under-) estimate,
+   * not a wrong one.
    */
-  ESTIMATED_COST_PER_PROFILE_USD: 0.0026,
-  ESTIMATED_COST_PER_POST_USD: 0.0027,
-  ESTIMATED_COST_PER_TRANSCRIPT_USD: 0.05,
+  ESTIMATED_COST_PER_PROFILE_USD: 0.0023,
+  ESTIMATED_COST_PER_POST_USD: 0.0023,
+  ESTIMATED_COST_PER_TRANSCRIPT_USD: 0.044,
 
   /**
    * Dormancy rules for the verification worksheet (scripts/verification_worksheet.ts)
