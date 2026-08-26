@@ -359,7 +359,7 @@ async function stageProfile(apifyToken: string, confirmed: boolean) {
 
 const CLASSIFY_BATCH_SIZE = 20;
 
-async function classifyBatch(
+export async function classifyBatch(
   anthropic: InstanceType<typeof import("@anthropic-ai/sdk").default>,
   candidates: { candidate_id: string; handle: string; bio: string | null; recent_captions: string[] | null }[]
 ): Promise<Map<string, { classification: string; reason: string }>> {
