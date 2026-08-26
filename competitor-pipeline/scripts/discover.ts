@@ -20,7 +20,13 @@
  *   --gate      expensive gates: video_posts_90d, median_vpf_90d,
  *               last_post_at. Only runs on candidates --classify approved
  *               (career_coach/adjacent). The expensive Apify stage.
- *   --shortlist  write out/discovery_shortlist.csv for the human pass
+ *   --shortlist  write out/discovery_shortlist_<MARKET>.csv (one file per
+ *               market) for the human pass -- excludes classification
+ *               irrelevant/regulated even if gate_result='pass' (added
+ *               2026-08-26 after 2 legacy pre---classify rows briefly
+ *               reached the AU shortlist despite being classified
+ *               irrelevant; nothing had blocked that case before, unlike
+ *               'regulated', which the DB constraint already covers)
  *   --promote   read the completed shortlist back, insert approved rows
  *               into `competitors` (never automatic). Refuses any row
  *               classified 'regulated' (also enforced at the DB level,
@@ -40,7 +46,7 @@
  *   npm run discover -- --classify [--limit=AU]
  *   npm run discover -- --gate --confirm [--limit=AU] [--sample=55]
  *   npm run discover -- --shortlist
- *   npm run discover -- --promote --file out/discovery_shortlist.csv
+ *   npm run discover -- --promote --file out/discovery_shortlist_AU.csv
  */
 
 import { readFileSync, writeFileSync, mkdirSync } from "node:fs";
@@ -51,7 +57,6 @@ import { getSupabaseClient } from "./lib/supabaseClient.ts";
 
 const ACTORS_PATH = new URL("../apify/actors.json", import.meta.url);
 const SEED_QUERIES_PATH = new URL("../discovery/seed_queries.json", import.meta.url);
-const SHORTLIST_PATH = new URL("../out/discovery_shortlist.csv", import.meta.url);
 const OUT_DIR = new URL("../out/", import.meta.url);
 
 type Market = "AU" | "CA" | "US";
@@ -672,37 +677,67 @@ async function stageShortlist() {
     .order("median_vpf_90d", { ascending: false });
   if (error) throw new Error(`Failed to read discovery_candidates: ${error.message}`);
 
+  const allPassing = data ?? [];
+
+  // classification IN ('irrelevant','regulated') should never reach the
+  // shortlist -- same principle as 'regulated' being hard-blocked at
+  // promote time, just applied one stage earlier. Filtered in JS rather
+  // than a Postgrest .not("classification","in",...) filter: SQL's
+  // NOT IN treats a NULL classification as unknown/false and silently
+  // drops it too, which would hide legacy pre---classify rows (null
+  // classification) instead of surfacing them -- found on the AU sweep,
+  // see the console warning below.
+  const excluded = allPassing.filter((r) => r.classification === "irrelevant" || r.classification === "regulated");
+  const rows = allPassing.filter((r) => r.classification !== "irrelevant" && r.classification !== "regulated");
+  if (excluded.length > 0) {
+    console.log(`Excluded ${excluded.length} passing candidate(s) with classification irrelevant/regulated: ${excluded.map((r) => r.handle).join(", ")}`);
+  }
+  const unclassified = rows.filter((r) => r.classification === null);
+  if (unclassified.length > 0) {
+    console.log(`WARNING: ${unclassified.length} passing candidate(s) are still unclassified (never ran through --classify -- legacy pre---classify rows): ${unclassified.map((r) => r.handle).join(", ")}`);
+  }
+
   const columns = [
     "candidate_id", "platform", "handle", "display_name", "followers", "market_guess",
     "video_posts_90d", "median_vpf_90d", "band", "found_via", "classification", "classification_reason",
     "relevance_score", "topic_slugs", "proposed_tier", "reviewed_by",
   ];
-  const lines = [columns.join(",")];
-  for (const row of data ?? []) {
-    const record: Record<string, string> = {
-      candidate_id: row.candidate_id,
-      platform: row.platform,
-      handle: row.handle,
-      display_name: row.display_name ?? "",
-      followers: String(row.followers ?? ""),
-      market_guess: row.market_guess ?? "",
-      video_posts_90d: String(row.video_posts_90d ?? ""),
-      median_vpf_90d: String(row.median_vpf_90d ?? ""),
-      band: row.band ?? "",
-      found_via: row.found_via ?? "",
-      classification: row.classification ?? "",
-      classification_reason: row.classification_reason ?? "",
-      relevance_score: "",
-      topic_slugs: "",
-      proposed_tier: "",
-      reviewed_by: "",
-    };
-    lines.push(columns.map((c) => csvEscape(record[c])).join(","));
+
+  const byMarket = new Map<string, typeof rows>();
+  for (const row of rows) {
+    const market = row.market_guess ?? "unknown";
+    if (!byMarket.has(market)) byMarket.set(market, []);
+    byMarket.get(market)!.push(row);
   }
 
   mkdirSync(OUT_DIR, { recursive: true });
-  writeFileSync(SHORTLIST_PATH, lines.join("\n") + "\n", "utf-8");
-  console.log(`Wrote ${data?.length ?? 0} passing candidate(s) to ${SHORTLIST_PATH.pathname}`);
+  for (const [market, marketRows] of byMarket.entries()) {
+    const lines = [columns.join(",")];
+    for (const row of marketRows) {
+      const record: Record<string, string> = {
+        candidate_id: row.candidate_id,
+        platform: row.platform,
+        handle: row.handle,
+        display_name: row.display_name ?? "",
+        followers: String(row.followers ?? ""),
+        market_guess: row.market_guess ?? "",
+        video_posts_90d: String(row.video_posts_90d ?? ""),
+        median_vpf_90d: String(row.median_vpf_90d ?? ""),
+        band: row.band ?? "",
+        found_via: row.found_via ?? "",
+        classification: row.classification ?? "",
+        classification_reason: row.classification_reason ?? "",
+        relevance_score: "",
+        topic_slugs: "",
+        proposed_tier: "",
+        reviewed_by: "",
+      };
+      lines.push(columns.map((c) => csvEscape(record[c])).join(","));
+    }
+    const marketPath = new URL(`discovery_shortlist_${market}.csv`, OUT_DIR);
+    writeFileSync(marketPath, lines.join("\n") + "\n", "utf-8");
+    console.log(`Wrote ${marketRows.length} passing candidate(s) to ${marketPath.pathname}`);
+  }
 }
 
 // --- --promote --------------------------------------------------------
