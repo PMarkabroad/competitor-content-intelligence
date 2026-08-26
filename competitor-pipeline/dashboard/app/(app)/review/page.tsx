@@ -5,6 +5,11 @@ import { formatNumber, formatVpf, formatDate } from "@/lib/format";
 import { approveCandidate, rejectCandidate } from "./actions";
 import { APPROVED_COUNT_COOKIE } from "@/lib/auth";
 
+// Explicit even though searchParams usage already forces dynamic
+// rendering here -- consistent with every other data page, so this
+// doesn't regress to static if that usage ever changes.
+export const dynamic = "force-dynamic";
+
 interface DiscoveryCandidate {
   candidate_id: string;
   platform: string;

@@ -34,16 +34,5 @@ export function daysSince(value: string | null | undefined): number | null {
   return Math.floor((Date.now() - d.getTime()) / (1000 * 60 * 60 * 24));
 }
 
-const CADENCE_DAYS: Record<string, number> = {
-  weekly: 7,
-  fortnightly: 14,
-  monthly: 30,
-};
-
-export function isOverdue(lastScrapedAt: string | null | undefined, cadence: string | null | undefined): boolean {
-  const since = daysSince(lastScrapedAt);
-  if (since === null) return true; // never scraped at all
-  const expected = cadence ? CADENCE_DAYS[cadence] : undefined;
-  if (!expected) return false;
-  return since > expected;
-}
+// Overdue logic lives in lib/cadence.ts -- it needs tier as a fallback
+// since competitors.scrape_cadence isn't populated on every row.
