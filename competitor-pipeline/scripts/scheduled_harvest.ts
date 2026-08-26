@@ -285,18 +285,27 @@ async function main() {
   const { readFileSync } = await import("node:fs");
   const actors = JSON.parse(readFileSync(ACTORS_PATH, "utf-8")) as ActorsConfig;
 
+  // No market allowlist here -- `active=true` is what actually scopes
+  // this, and it's the correct single source of truth. A hardcoded
+  // .in("market", ["AU","US"]) used to sit here as "defense in depth"
+  // against CA ever being active, written when CA genuinely had zero
+  // active rows -- once real CA candidates started getting approved via
+  // the dashboard, that filter silently excluded all of them from every
+  // harvest run. Found live 2026-08-26: 11 newly-approved CA accounts
+  // sat with last_scraped_at=null after a full T2 harvest run because of
+  // this. Removed -- if a row is active, it's meant to be harvested,
+  // regardless of market.
   const { data, error } = await supabase
     .from("competitors")
     .select("competitor_id, name, platform, market, handle, posts_per_run, last_scraped_at, tier")
     .eq("tier", tier)
     .eq("active", true)
-    .eq("handle_verified", true)
-    .in("market", ["AU", "US"]); // CA stays active=false and out of scope regardless; explicit as defense in depth
+    .eq("handle_verified", true);
 
   if (error) throw new Error(`Failed to read competitors: ${error.message}`);
   const competitors = (data ?? []) as Competitor[];
   if (competitors.length === 0) {
-    console.log(`No active, verified ${tier} competitors in AU/US. Nothing to harvest.`);
+    console.log(`No active, verified ${tier} competitors. Nothing to harvest.`);
     return;
   }
 
