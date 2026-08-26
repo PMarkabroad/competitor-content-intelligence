@@ -71,6 +71,21 @@ function detectRole(item: Record<string, unknown>): Role {
   return "posts";
 }
 
+// A repost during a posting gap gets algorithmic resurfacing to a wider
+// audience than its original run, which can produce a high vpf that
+// reflects distribution mechanics, not a hook landing today -- excluded
+// from v_outliers the same way paid_partnership is (migration 011).
+// There's no structured "is this a repost" field in the actor's output,
+// so this is a caption-text heuristic (same patterns as migration 011's
+// SQL backfill, kept in sync): it catches explicit self-disclosure
+// ("revisiting", "repost", ...), not every repost -- a caption that
+// doesn't mention it will read as false here.
+const REPOST_SIGNAL_PATTERN = /revisit|repost|re-post|throwback|flashback|resharing|re-sharing|from the archive/i;
+
+function detectRepost(caption: unknown): boolean {
+  return typeof caption === "string" && REPOST_SIGNAL_PATTERN.test(caption);
+}
+
 function logFlag(message: string, context: Record<string, unknown>) {
   const entry = {
     level: "error",
@@ -179,6 +194,7 @@ export async function ingestPost(
       shares: item.sharesCount ?? item.shareCount ?? item.shares ?? null,
       duration_seconds: item.videoDuration ?? item.durationSeconds ?? null,
       paid_partnership: item.paidPartnership ?? null,
+      is_repost: detectRepost(item.caption ?? item.text),
       followers_at_scrape: followersAtScrape,
       run_id: runId,
       raw,
