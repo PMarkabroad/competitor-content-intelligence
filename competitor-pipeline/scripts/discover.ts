@@ -399,11 +399,23 @@ Respond with ONLY a JSON array, no markdown fences, no preamble: [{"handle": "..
     throw new Error("Classify response had no text block.");
   }
 
+  // Defensive: the system prompt says "no markdown fences", but Haiku 4.5
+  // wrapped every response in ```json ... ``` anyway on the first real run
+  // (2026-08-26) -- every batch failed to parse and was silently skipped
+  // as a result, with zero candidates classified despite the model's
+  // actual classifications being correct. Strip a fenced-code wrapper if
+  // present before parsing, rather than trusting the instruction alone.
+  const jsonText = textBlock.text
+    .trim()
+    .replace(/^```(?:json)?\s*/i, "")
+    .replace(/```\s*$/i, "")
+    .trim();
+
   let parsed: { handle: string; classification: string; reason: string }[];
   try {
-    parsed = JSON.parse(textBlock.text);
+    parsed = JSON.parse(jsonText);
   } catch (err) {
-    throw new Error(`Failed to parse classify response as JSON: ${textBlock.text.slice(0, 500)}`);
+    throw new Error(`Failed to parse classify response as JSON: ${jsonText.slice(0, 500)}`);
   }
 
   const validClassifications = new Set(["career_coach", "adjacent", "irrelevant", "regulated"]);
