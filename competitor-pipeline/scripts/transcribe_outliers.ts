@@ -27,7 +27,7 @@
  * own `not exists (select 1 from competitor_transcripts...)` clause), so
  * this script doesn't re-check that itself.
  *
- * Usage: npm run transcribe-outliers [-- --limit=N]
+ * Usage: npm run transcribe-outliers -- [--limit=N]
  */
 
 import "dotenv/config";
@@ -50,8 +50,13 @@ interface OutlierRow {
 }
 
 async function main() {
-  const limitArgIndex = process.argv.indexOf("--limit");
-  const limit = limitArgIndex >= 0 ? Number(process.argv[limitArgIndex + 1]) : null;
+  // "--limit=" (equals-sign style), matching discover.ts's convention --
+  // NOT a separate "--limit N" token, which npm's "--" passthrough doesn't
+  // require and this codebase doesn't use anywhere else. A first version
+  // of this looked for a separate token, silently never matched, and ran
+  // all 72 outliers instead of the intended 2 on the first real test.
+  const limitArg = process.argv.find((a) => a.startsWith("--limit="));
+  const limit = limitArg ? Number(limitArg.slice("--limit=".length)) : null;
 
   const apifyToken = process.env.APIFY_TOKEN;
   if (!apifyToken) throw new Error("APIFY_TOKEN must be set.");
@@ -151,8 +156,19 @@ async function main() {
     }
   }
 
-  const spentAfter = await getRealMonthToDateSpendUsd(apifyToken);
-  console.log(`\nDone. ${transcribed} transcribed, ${noCaptions} had no native captions, ${failed} failed. Real spend now: $${spentAfter.toFixed(4)} / $${cap}.`);
+  // A real transient network blip (DNS resolution failure reaching
+  // api.apify.com) hit this exact call on the first real test run, after
+  // the per-post loop above had already finished and logged its own
+  // results -- letting that failure propagate uncaught turned an
+  // otherwise-successful run into a nonzero exit with no summary line.
+  // The per-post loop already has its own try/catch for the actual
+  // transcription work; this is just a closing status check.
+  try {
+    const spentAfter = await getRealMonthToDateSpendUsd(apifyToken);
+    console.log(`\nDone. ${transcribed} transcribed, ${noCaptions} had no native captions, ${failed} failed. Real spend now: $${spentAfter.toFixed(4)} / $${cap}.`);
+  } catch (err) {
+    console.log(`\nDone. ${transcribed} transcribed, ${noCaptions} had no native captions, ${failed} failed. (Could not fetch final spend total: ${err instanceof Error ? err.message : String(err)})`);
+  }
 }
 
 main().catch((err) => {
