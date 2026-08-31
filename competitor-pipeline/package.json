@@ -16,7 +16,8 @@
     "report-deciles": "tsx scripts/report_deciles.ts",
     "discover": "tsx scripts/discover.ts",
     "scheduled-harvest": "tsx scripts/scheduled_harvest.ts",
-    "harvest-t1": "tsx scripts/harvest_t1.ts"
+    "harvest-t1": "tsx scripts/harvest_t1.ts",
+    "transcribe-outliers": "tsx scripts/transcribe_outliers.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.120.0",
