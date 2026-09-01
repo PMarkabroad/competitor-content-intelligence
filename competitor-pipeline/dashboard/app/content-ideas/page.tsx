@@ -43,8 +43,10 @@ interface RawOutlier {
   views: number | null;
   vpf: number | null;
   outlier_score: number | null;
-  competitor_posts: { post_url: string | null; caption: string | null } | null;
-  competitors: { name: string; market: string; handle: string } | null;
+  post_url: string | null;
+  caption: string | null;
+  competitor_name: string;
+  competitor_market: string;
 }
 
 const BRAND_FIT_TONE: Record<string, "good" | "warn" | "bad"> = { yes: "good", with_changes: "warn", no: "bad" };
@@ -77,14 +79,14 @@ function buildTaggedDump(idea: TaggedIdea, transcript: string | null): string {
 
 function buildRawDump(row: RawOutlier): string {
   const lines: string[] = [];
-  lines.push(`${row.competitors?.name ?? "Unknown"} (${row.competitors?.market ?? "—"}) — outlier ${formatScore(row.outlier_score)}, ${formatNumber(row.views)} views, vpf ${formatVpf(row.vpf)}`);
-  if (row.competitor_posts?.caption) {
+  lines.push(`${row.competitor_name} (${row.competitor_market}) — outlier ${formatScore(row.outlier_score)}, ${formatNumber(row.views)} views, vpf ${formatVpf(row.vpf)}`);
+  if (row.caption) {
     lines.push("");
-    lines.push(`Caption: "${row.competitor_posts.caption}"`);
+    lines.push(`Caption: "${row.caption}"`);
   }
   lines.push("");
   lines.push("Not yet transcribed or tagged -- this is raw signal from scoring only.");
-  if (row.competitor_posts?.post_url) lines.push(`Original: ${row.competitor_posts.post_url}`);
+  if (row.post_url) lines.push(`Original: ${row.post_url}`);
   return lines.join("\n");
 }
 
@@ -114,13 +116,50 @@ export default async function ContentIdeasPage() {
     }
   }
 
-  const { data: rawData, error: rawError } = await supabase
+  // v_outliers is a VIEW, not a table -- it has no foreign key constraints
+  // of its own, so PostgREST can't auto-embed competitor_posts/competitors
+  // the way it can for a real table like hook_library. Fetch it plain,
+  // then join in JS, same pattern as the transcript lookup above.
+  const { data: outlierRows, error: rawError } = await supabase
     .from("v_outliers")
-    .select("post_id, competitor_id, posted_at, views, vpf, outlier_score, competitor_posts(post_url, caption), competitors(name, market, handle)")
+    .select("post_id, competitor_id, posted_at, views, vpf, outlier_score")
     .order("outlier_score", { ascending: false })
     .limit(30);
   if (rawError) throw new Error(`Failed to load v_outliers: ${rawError.message}`);
-  const rawOutliers = (rawData ?? []) as unknown as RawOutlier[];
+
+  const outlierPostIds = (outlierRows ?? []).map((r) => r.post_id);
+  const outlierCompetitorIds = [...new Set((outlierRows ?? []).map((r) => r.competitor_id))];
+
+  const postById = new Map<string, { post_url: string | null; caption: string | null }>();
+  if (outlierPostIds.length > 0) {
+    const { data: posts } = await supabase
+      .from("competitor_posts")
+      .select("post_id, post_url, caption")
+      .in("post_id", outlierPostIds);
+    for (const p of posts ?? []) postById.set(p.post_id, { post_url: p.post_url, caption: p.caption });
+  }
+
+  const competitorById = new Map<string, { name: string; market: string }>();
+  if (outlierCompetitorIds.length > 0) {
+    const { data: comps } = await supabase
+      .from("competitors")
+      .select("competitor_id, name, market")
+      .in("competitor_id", outlierCompetitorIds);
+    for (const c of comps ?? []) competitorById.set(c.competitor_id, { name: c.name, market: c.market });
+  }
+
+  const rawOutliers: RawOutlier[] = (outlierRows ?? []).map((r) => ({
+    post_id: r.post_id,
+    competitor_id: r.competitor_id,
+    posted_at: r.posted_at,
+    views: r.views,
+    vpf: r.vpf,
+    outlier_score: r.outlier_score,
+    post_url: postById.get(r.post_id)?.post_url ?? null,
+    caption: postById.get(r.post_id)?.caption ?? null,
+    competitor_name: competitorById.get(r.competitor_id)?.name ?? "Unknown",
+    competitor_market: competitorById.get(r.competitor_id)?.market ?? "—",
+  }));
 
   return (
     <div className="p-4">
@@ -195,7 +234,7 @@ export default async function ContentIdeasPage() {
               <div key={row.post_id} className="panel p-3 opacity-90">
                 <div className="mb-2 flex items-start justify-between gap-2">
                   <p className="text-sm text-text">
-                    {row.competitor_posts?.caption ? `"${row.competitor_posts.caption.slice(0, 140)}${row.competitor_posts.caption.length > 140 ? "…" : ""}"` : "No caption"}
+                    {row.caption ? `"${row.caption.slice(0, 140)}${row.caption.length > 140 ? "…" : ""}"` : "No caption"}
                   </p>
                   <span className="shrink-0 font-mono text-sm font-semibold text-brand">{formatScore(row.outlier_score)}</span>
                 </div>
@@ -203,11 +242,11 @@ export default async function ContentIdeasPage() {
                   <Badge tone="warn">not transcribed</Badge>
                 </div>
                 <p className="mb-2 text-xs text-dim">
-                  {row.competitors?.name ?? "—"} · {row.competitors?.market ?? "—"} · {formatNumber(row.views)} views · vpf {formatVpf(row.vpf)}
+                  {row.competitor_name} · {row.competitor_market} · {formatNumber(row.views)} views · vpf {formatVpf(row.vpf)}
                 </p>
                 <div className="flex items-center justify-between gap-2 border-t border-border pt-2">
-                  {row.competitor_posts?.post_url ? (
-                    <a href={row.competitor_posts.post_url} target="_blank" rel="noreferrer" className="text-xs text-brand hover:underline">
+                  {row.post_url ? (
+                    <a href={row.post_url} target="_blank" rel="noreferrer" className="text-xs text-brand hover:underline">
                       Original post →
                     </a>
                   ) : <span />}
