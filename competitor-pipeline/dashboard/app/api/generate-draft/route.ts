@@ -1,0 +1,105 @@
+import "server-only";
+import Anthropic from "@anthropic-ai/sdk";
+import { NextRequest, NextResponse } from "next/server";
+import { ARK_VOICE_GUIDE } from "@/lib/voice-guide";
+
+export const dynamic = "force-dynamic";
+
+interface DraftRequest {
+  competitor_name: string;
+  market: string;
+  hook_pattern?: string | null;
+  format?: string | null;
+  content_angle?: string | null;
+  narrative_structure?: string | null;
+  cta?: string | null;
+  why_it_performed?: string | null;
+  opening_line?: string | null;
+  transcript?: string | null;
+  caption?: string | null;
+  views?: number | null;
+  vpf?: number | null;
+  outlier_score?: number | null;
+}
+
+const SYSTEM_PROMPT = `You are drafting social content for Ark Abroad, following the brand voice guide below exactly.
+
+${ARK_VOICE_GUIDE}
+
+---
+
+You are given a high-performing post from a COMPETITOR account, as competitive intelligence -- not something Ark posted. Your job is NOT to copy or closely paraphrase their words. It is to identify the underlying mechanism (the hook pattern, structure, or angle that made it work) and build an ORIGINAL Ark Abroad piece around that same mechanism, using Ark's own story material, vocabulary, and rules from the guide above.
+
+Follow "Never ships" strictly, with no exceptions. Do not fabricate outcome numbers not implied by the guide's proof bank. Do not use any Amber-tier personal story detail -- Green-tier only. If the competitor's content touches on immigration/visa claims, do not carry over any specific legal claims; Ark's own positioning is "positioning, not fabrication," never advice to misrepresent.
+
+Output ONLY valid JSON, no markdown code fences, no commentary before or after, in exactly this shape:
+{"hook": "the opening line, one or two sentences, following 'open cold'", "script": "the full reel voiceover or carousel script, ready to read or post, following the four-part core and sentence mechanics", "caption": "a short Instagram caption, following the Instagram caption register (none to one mild profanity)"}`;
+
+export async function POST(request: NextRequest) {
+  const apiKey = process.env.ANTHROPIC_API_KEY;
+  if (!apiKey) {
+    return NextResponse.json({ error: "ANTHROPIC_API_KEY is not configured on this deployment." }, { status: 500 });
+  }
+
+  let body: DraftRequest;
+  try {
+    body = await request.json();
+  } catch {
+    return NextResponse.json({ error: "Invalid request body." }, { status: 400 });
+  }
+
+  if (!body.competitor_name || !body.market || (!body.transcript && !body.caption)) {
+    return NextResponse.json({ error: "Missing competitor name, market, or any source material (transcript/caption)." }, { status: 400 });
+  }
+
+  const sourceLines: string[] = [];
+  sourceLines.push(`Competitor: ${body.competitor_name} (${body.market} market)`);
+  if (body.outlier_score != null) sourceLines.push(`Outlier score: ${body.outlier_score.toFixed(1)}x baseline`);
+  if (body.views != null) sourceLines.push(`Views: ${body.views}`);
+  if (body.vpf != null) sourceLines.push(`Views per follower: ${body.vpf.toFixed(4)}`);
+  if (body.hook_pattern) sourceLines.push(`Hook pattern: ${body.hook_pattern}`);
+  if (body.format) sourceLines.push(`Format: ${body.format}`);
+  if (body.content_angle) sourceLines.push(`Angle: ${body.content_angle}`);
+  if (body.narrative_structure) sourceLines.push(`Structure: ${body.narrative_structure}`);
+  if (body.cta) sourceLines.push(`CTA used: ${body.cta}`);
+  if (body.why_it_performed) sourceLines.push(`Analyst note on why it performed: ${body.why_it_performed}`);
+  if (body.opening_line) sourceLines.push(`Opening line: "${body.opening_line}"`);
+  if (body.transcript) {
+    sourceLines.push("");
+    sourceLines.push("Full transcript:");
+    sourceLines.push(body.transcript);
+  } else if (body.caption) {
+    sourceLines.push("");
+    sourceLines.push(`Caption only (post not yet transcribed): "${body.caption}"`);
+  }
+
+  const userPrompt = `Competitor post to analyze and adapt for Ark Abroad:\n\n${sourceLines.join("\n")}`;
+
+  try {
+    const anthropic = new Anthropic({ apiKey });
+    const message = await anthropic.messages.create({
+      model: "claude-sonnet-5",
+      max_tokens: 4096,
+      thinking: { type: "disabled" },
+      system: SYSTEM_PROMPT,
+      messages: [{ role: "user", content: userPrompt }],
+    });
+
+    const textBlock = message.content.find((b) => b.type === "text");
+    if (!textBlock || textBlock.type !== "text") {
+      return NextResponse.json({ error: "No text returned from the model." }, { status: 502 });
+    }
+
+    let parsed: { hook: string; script: string; caption: string };
+    try {
+      parsed = JSON.parse(textBlock.text);
+    } catch {
+      return NextResponse.json({ error: "Model did not return valid JSON.", raw: textBlock.text.slice(0, 500) }, { status: 502 });
+    }
+
+    return NextResponse.json(parsed);
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "Unknown error";
+    return NextResponse.json({ error: `Generation failed: ${message}` }, { status: 502 });
+  }
+}
