@@ -32,7 +32,7 @@ interface TaggedRow {
   brand_fit: string | null;
   brand_fit_note: string | null;
   competitor_posts: { post_url: string | null; caption: string | null } | null;
-  competitors: { name: string; market: string; tier: string } | null;
+  competitors: { name: string; market: string; tier: string; active: boolean } | null;
 }
 
 interface OutlierRow {
@@ -69,11 +69,13 @@ export default async function ContentIdeasPage() {
   const { data: taggedData, error: taggedError } = await supabase
     .from("hook_library")
     .select(
-      "hook_id, post_id, hook_pattern, format, topic_slug, content_angle, narrative_structure, cta, why_it_performed, opening_line, outlier_score, vpf, au_transplant, transplant_note, brand_fit, brand_fit_note, competitor_posts(post_url, caption), competitors(name, market, tier)"
+      "hook_id, post_id, hook_pattern, format, topic_slug, content_angle, narrative_structure, cta, why_it_performed, opening_line, outlier_score, vpf, au_transplant, transplant_note, brand_fit, brand_fit_note, competitor_posts(post_url, caption), competitors(name, market, tier, active)"
     )
     .order("outlier_score", { ascending: false });
   if (taggedError) throw new Error(`Failed to load hook_library: ${taggedError.message}`);
-  const taggedRows = ((taggedData ?? []) as unknown as TaggedRow[]).filter((r) => r.brand_fit !== "no");
+  const taggedRows = ((taggedData ?? []) as unknown as TaggedRow[]).filter(
+    (r) => r.brand_fit !== "no" && r.competitors?.active !== false
+  );
 
   const taggedPostIds = taggedRows.map((r) => r.post_id);
   const transcriptByPost = new Map<string, string>();
