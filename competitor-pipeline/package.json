@@ -17,7 +17,9 @@
     "discover": "tsx scripts/discover.ts",
     "scheduled-harvest": "tsx scripts/scheduled_harvest.ts",
     "harvest-t1": "tsx scripts/harvest_t1.ts",
-    "transcribe-outliers": "tsx scripts/transcribe_outliers.ts"
+    "transcribe-outliers": "tsx scripts/transcribe_outliers.ts",
+    "draft-hook-tags": "tsx scripts/draft_hook_tags.ts",
+    "roster-quality": "tsx scripts/roster_quality.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.120.0",
