@@ -11,20 +11,21 @@ import { usePathname } from "next/navigation";
 // Nothing was deleted -- every route below still exists and works.
 const PRIMARY_LINKS: { href: string; label: string }[] = [
   { href: "/", label: "Dashboard" },
-  { href: "/review", label: "Review" },
   { href: "/content-ideas", label: "Content ideas" },
-  { href: "/hooks", label: "Hooks" },
+  { href: "/drafts", label: "Ready-made posts" },
+  { href: "/transcripts", label: "Transcripts" },
   { href: "/status", label: "Status" },
 ];
 
 const MORE_LINKS: { href: string; label: string }[] = [
+  { href: "/review", label: "Review" },
   { href: "/competitors", label: "Competitors" },
   { href: "/outliers", label: "Outliers" },
   { href: "/reports", label: "Reports" },
+  { href: "/hooks", label: "Hooks" },
   { href: "/hooks/analysis", label: "Hook patterns" },
   { href: "/formats", label: "Formats" },
   { href: "/topics", label: "Topics" },
-  { href: "/transcripts", label: "Transcripts" },
   { href: "/markets", label: "Markets" },
   { href: "/gaps", label: "Gaps" },
   { href: "/recommendations", label: "Recommendations" },
@@ -56,10 +57,13 @@ export function Nav() {
 
   return (
     <nav className="flex h-full w-48 shrink-0 flex-col overflow-y-auto border-r border-border bg-surface/60 backdrop-blur-sm">
-      <div className="flex items-center gap-2 border-b border-border px-4 py-4">
+      <Link
+        href="/"
+        className="flex items-center gap-2 border-b border-border px-4 py-4 transition-colors hover:bg-surface-hover"
+      >
         <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-brand" />
         <span className="text-[13px] font-semibold tracking-tight text-text">Ark Competitor Intel</span>
-      </div>
+      </Link>
       <div className="flex flex-col gap-0.5 p-2.5">
         {PRIMARY_LINKS.map((link) => (
           <NavLink key={link.href} href={link.href} label={link.label} active={isActive(pathname, link.href)} />

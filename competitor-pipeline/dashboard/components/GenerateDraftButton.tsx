@@ -5,6 +5,7 @@ import { useState } from "react";
 export interface DraftPayload {
   competitor_name: string;
   market: string;
+  post_id?: string | null;
   hook_pattern?: string | null;
   format?: string | null;
   content_angle?: string | null;

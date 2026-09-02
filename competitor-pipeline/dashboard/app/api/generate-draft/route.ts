@@ -2,12 +2,14 @@ import "server-only";
 import Anthropic from "@anthropic-ai/sdk";
 import { NextRequest, NextResponse } from "next/server";
 import { ARK_VOICE_GUIDE } from "@/lib/voice-guide";
+import { getSupabaseServerClient } from "@/lib/supabase";
 
 export const dynamic = "force-dynamic";
 
 interface DraftRequest {
   competitor_name: string;
   market: string;
+  post_id?: string | null;
   hook_pattern?: string | null;
   format?: string | null;
   content_angle?: string | null;
@@ -95,6 +97,26 @@ export async function POST(request: NextRequest) {
       parsed = JSON.parse(textBlock.text);
     } catch {
       return NextResponse.json({ error: "Model did not return valid JSON.", raw: textBlock.text.slice(0, 500) }, { status: 502 });
+    }
+
+    // Persist so the draft survives a page refresh / is visible on the Ready-made posts page.
+    // A save failure shouldn't block returning the draft to the person waiting on it.
+    try {
+      const supabase = getSupabaseServerClient();
+      await supabase.from("generated_drafts").insert({
+        competitor_name: body.competitor_name,
+        market: body.market,
+        source_post_id: body.post_id ?? null,
+        source_caption: body.caption ?? null,
+        source_views: body.views ?? null,
+        source_vpf: body.vpf ?? null,
+        source_outlier_score: body.outlier_score ?? null,
+        hook: parsed.hook,
+        script: parsed.script,
+        caption: parsed.caption,
+      });
+    } catch (saveErr) {
+      console.error("Failed to persist generated draft:", saveErr);
     }
 
     return NextResponse.json(parsed);

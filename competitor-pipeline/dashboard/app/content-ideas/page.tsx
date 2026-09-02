@@ -144,6 +144,7 @@ export default async function ContentIdeasPage() {
       draftPayload: {
         competitor_name: competitorName,
         market,
+        post_id: row.post_id,
         hook_pattern: row.hook_pattern,
         format: row.format,
         content_angle: row.content_angle,
@@ -189,6 +190,7 @@ export default async function ContentIdeasPage() {
       draftPayload: {
         competitor_name: competitorName,
         market,
+        post_id: row.post_id,
         caption: post?.caption ?? null,
         vpf: row.vpf,
         views: row.views,
