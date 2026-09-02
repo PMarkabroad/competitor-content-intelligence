@@ -13,8 +13,8 @@ import "server-only";
 const rawCap = process.env.MONTHLY_APIFY_SPEND_CAP_USD;
 export const MONTHLY_APIFY_SPEND_CAP_USD = rawCap ? Number(rawCap) : null;
 
-export async function getMonthToDateApifySpend(): Promise<number | null> {
-  const token = process.env.APIFY_TOKEN;
+export async function getMonthToDateApifySpend(tokenOverride?: string): Promise<number | null> {
+  const token = tokenOverride || process.env.APIFY_TOKEN;
   if (!token) return null;
   try {
     const res = await fetch(`https://api.apify.com/v2/users/me/usage/monthly?token=${token}`, {

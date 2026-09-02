@@ -53,6 +53,7 @@ export default async function DashboardHome() {
       <p className="mb-4 text-xs text-faint">Ranked by median views-per-follower -- who's actually performing, not just who's biggest.</p>
 
       <div className="panel mb-4 p-4">
+        <h2 className="mb-3 text-xs font-semibold text-faint">Median views-per-follower, top 10 competitors</h2>
         {chartData.length === 0 ? (
           <p className="text-xs text-faint">Not enough data yet.</p>
         ) : (

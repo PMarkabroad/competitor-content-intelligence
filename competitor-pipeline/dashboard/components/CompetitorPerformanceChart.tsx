@@ -29,7 +29,12 @@ export function CompetitorPerformanceChart({ data }: { data: ChartRow[] }) {
           textAnchor="end"
           height={60}
         />
-        <YAxis tick={{ fill: "rgba(255,255,255,0.45)", fontSize: 11 }} axisLine={false} tickLine={false} />
+        <YAxis
+          tick={{ fill: "rgba(255,255,255,0.45)", fontSize: 11 }}
+          axisLine={false}
+          tickLine={false}
+          label={{ value: "median VPF", angle: -90, position: "insideLeft", fill: "rgba(255,255,255,0.45)", fontSize: 11 }}
+        />
         <Tooltip
           cursor={{ fill: "rgba(255,255,255,0.04)" }}
           contentStyle={{
