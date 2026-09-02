@@ -16,28 +16,38 @@ interface OutlierRow {
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
   const limit = Number(searchParams.get("limit") ?? "5");
+  const offset = Number(searchParams.get("offset") ?? "0");
   const apifyToken = searchParams.get("apifyToken") ?? undefined;
-  return runTranscriptionBatch({ limit, apifyToken });
+  return runTranscriptionBatch({ limit, offset, apifyToken });
 }
 
 export async function POST(request: NextRequest) {
-  let body: { limit?: number; apifyToken?: string };
+  let body: { limit?: number; offset?: number; apifyToken?: string };
   try {
     body = await request.json();
   } catch {
     return NextResponse.json({ error: "Invalid request body -- expected JSON with apifyToken." }, { status: 400 });
   }
-  return runTranscriptionBatch({ limit: body.limit, apifyToken: body.apifyToken });
+  return runTranscriptionBatch({ limit: body.limit, offset: body.offset, apifyToken: body.apifyToken });
 }
 
-async function runTranscriptionBatch({ limit: limitInput, apifyToken: tokenInput }: { limit?: number; apifyToken?: string }) {
+async function runTranscriptionBatch({
+  limit: limitInput,
+  offset: offsetInput,
+  apifyToken: tokenInput,
+}: {
+  limit?: number;
+  offset?: number;
+  apifyToken?: string;
+}) {
   const apifyToken = tokenInput || process.env.APIFY_TOKEN;
   if (!apifyToken) {
     return NextResponse.json({ error: "No Apify token provided and APIFY_TOKEN is not configured on this deployment." }, { status: 400 });
   }
 
   let limit = 5;
-  if (typeof limitInput === "number" && limitInput > 0) limit = Math.min(limitInput, 25);
+  if (typeof limitInput === "number" && limitInput > 0) limit = Math.min(limitInput, 3);
+  const offset = typeof offsetInput === "number" && offsetInput >= 0 ? offsetInput : 0;
 
   const supabase = getSupabaseServerClient();
 
@@ -47,7 +57,7 @@ async function runTranscriptionBatch({ limit: limitInput, apifyToken: tokenInput
     .order("outlier_score", { ascending: false });
   if (error) return NextResponse.json({ error: `Failed to read v_outliers: ${error.message}` }, { status: 500 });
 
-  const rows = ((outliers ?? []) as OutlierRow[]).slice(0, limit);
+  const rows = ((outliers ?? []) as OutlierRow[]).slice(offset, offset + limit);
   if (rows.length === 0) {
     return NextResponse.json({ message: "No outliers pending transcription.", transcribed: 0, noCaptions: 0, failed: 0, skippedNonTiktok: 0 });
   }
