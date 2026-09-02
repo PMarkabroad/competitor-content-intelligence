@@ -19,7 +19,8 @@
     "harvest-t1": "tsx scripts/harvest_t1.ts",
     "transcribe-outliers": "tsx scripts/transcribe_outliers.ts",
     "draft-hook-tags": "tsx scripts/draft_hook_tags.ts",
-    "roster-quality": "tsx scripts/roster_quality.ts"
+    "roster-quality": "tsx scripts/roster_quality.ts",
+    "backfill-hook-scores": "tsx scripts/backfill_hook_scores.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.120.0",

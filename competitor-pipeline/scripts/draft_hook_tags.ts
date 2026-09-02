@@ -225,15 +225,25 @@ async function main() {
     .in("post_id", pendingIds);
   if (pErr) throw new Error(`Failed to read posts: ${pErr.message}`);
 
-  const { data: metrics } = await supabase.from("v_post_metrics").select("post_id, vpf").in("post_id", pendingIds);
+  const { data: metrics } = await supabase
+    .from("v_post_metrics")
+    .select("post_id, vpf")
+    .in("post_id", pendingIds);
   const vpfByPost = new Map((metrics ?? []).map((m) => [m.post_id, m.vpf as number | null]));
 
-  // Outlier scores only exist for posts still IN v_outliers; a post that
-  // was transcribed earlier has since dropped out of that view (it excludes
-  // already-transcribed posts), so this is a best-effort enrichment, not a
-  // required join.
-  const { data: outliers } = await supabase.from("v_outliers").select("post_id, outlier_score");
-  const scoreByPost = new Map((outliers ?? []).map((o) => [o.post_id, o.outlier_score as number]));
+  // outlier_score is computed from its DEFINITION (post vpf / that account's
+  // baseline median vpf) rather than read out of v_outliers. v_outliers
+  // excludes posts that already have a transcript -- that's the whole point
+  // of it, it answers "what should we spend transcription budget on next" --
+  // so in the normal transcribe-then-tag order every post has already
+  // dropped out of it by the time this runs, and reading the score from
+  // there silently writes null. That happened to 64 of the first 66 rows.
+  const { data: baselines } = await supabase
+    .from("v_competitor_baseline")
+    .select("competitor_id, baseline_median_vpf");
+  const baseByComp = new Map(
+    (baselines ?? []).map((b) => [b.competitor_id, b.baseline_median_vpf as number])
+  );
 
   const competitorIds = Array.from(new Set((posts ?? []).map((p) => p.competitor_id)));
   const { data: competitors } = await supabase
@@ -244,17 +254,25 @@ async function main() {
 
   const transcriptByPost = new Map((transcripts ?? []).map((t) => [t.post_id, t.transcript as string]));
 
-  let candidates: Candidate[] = (posts ?? []).map((p) => ({
-    post_id: p.post_id,
-    competitor_id: p.competitor_id,
-    competitor_name: compById.get(p.competitor_id)?.name ?? "(unknown)",
-    market: compById.get(p.competitor_id)?.market ?? "?",
-    caption: p.caption,
-    transcript: transcriptByPost.get(p.post_id) ?? "",
-    outlier_score: scoreByPost.get(p.post_id) ?? null,
-    vpf: vpfByPost.get(p.post_id) ?? null,
-    duration_seconds: p.duration_seconds,
-  }));
+  let candidates: Candidate[] = (posts ?? []).map((p) => {
+    const vpf = vpfByPost.get(p.post_id) ?? null;
+    const median = baseByComp.get(p.competitor_id);
+    // No baseline means no DEFINED relative score (too few scoreable posts,
+    // or a non-scoreable tier -- T1 is excluded from scoring by design), so
+    // it stays null rather than being invented.
+    const outlierScore = vpf != null && median && median > 0 ? vpf / median : null;
+    return {
+      post_id: p.post_id,
+      competitor_id: p.competitor_id,
+      competitor_name: compById.get(p.competitor_id)?.name ?? "(unknown)",
+      market: compById.get(p.competitor_id)?.market ?? "?",
+      caption: p.caption,
+      transcript: transcriptByPost.get(p.post_id) ?? "",
+      outlier_score: outlierScore,
+      vpf,
+      duration_seconds: p.duration_seconds,
+    };
+  });
 
   candidates.sort((a, b) => (b.outlier_score ?? 0) - (a.outlier_score ?? 0));
   if (limit) candidates = candidates.slice(0, limit);
