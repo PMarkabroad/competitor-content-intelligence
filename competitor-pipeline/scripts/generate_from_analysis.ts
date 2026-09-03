@@ -190,7 +190,11 @@ HARD RULES, no exceptions:
 - Never invent a specific vacancy, employer, salary or city as though it exists, and never invent WHAT SOMETHING COSTS -- not what a coach or service charges, not what a process costs a person. No made-up job postings and no made-up prices, even as illustration. A reader can't tell an illustration from a market claim.
 - Never state or imply anything about visa outcomes, sponsorship eligibility or migration pathways. Immigration assistance is a regulated activity in Australia; Ark is a career accelerator, not a migration agent.
 - Green-tier founder story material only.
-- "Direct second person" does not mean every sentence starts with "you". Mix person the way the founder actually does: the empathy pivot is THIRD person ("They're taking action. They're executing like crazy."), credibility and story beats are FIRST person ("I applied to 1,000 to 2,000 roles"), and second person carries the instruction. Aim for three or four "you/your" per hundred words, not six.
+- PERSON. Every script must contain all three of these, and you should be able to point at them:
+  (a) an empathy-pivot stack written in THIRD person, at least three sentences with the same opener, about the people this is for -- "They're taking action. They're executing like crazy. They're working hard in their survival jobs." Do NOT write this stack as "you";
+  (b) at least one FIRST person beat from the founder's own history -- "I applied to 1,000 to 2,000 roles with no replies";
+  (c) second person only where you are telling one person what to do.
+  Do not open consecutive sentences with "You" or "Your". If three sentences in a row begin with "You", rewrite two of them. Measured against the founder's real transcripts, drafts have been running "you/your" at nearly twice his rate, and it reads as nagging rather than as him.
 - Follow "Never ships" in full.
 
 Output ONLY valid JSON, no markdown fences, no preamble:
