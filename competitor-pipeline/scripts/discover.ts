@@ -71,8 +71,10 @@ interface ActorsConfig {
   tiktokPosts: ActorPin;
   tiktokProfile: ActorPin;
   // Instagram candidates come from discover_instagram.ts and are profiled
-  // with Instagram's own actor -- the TikTok one returns nothing for them.
+  // and gated with Instagram's own actors -- the TikTok ones return
+  // nothing for them.
   profile: ActorPin;
+  posts: ActorPin;
 }
 
 function loadActors(): ActorsConfig {
@@ -111,15 +113,21 @@ async function runApifyActor(
   return (await res.json()) as Record<string, unknown>[];
 }
 
-// Uses DISCOVERY_FOLLOWER_BANDS (TikTok-calibrated), not FOLLOWER_BANDS
-// (Instagram-only, used by the real harvest pipeline and baked into
-// v_outliers's SQL) -- see config.ts's comment on DISCOVERY_FOLLOWER_BANDS
-// for why one set of floors can't serve both platforms.
-function resolveBand(followers: number) {
-  for (const band of config.DISCOVERY_FOLLOWER_BANDS) {
+// Band floors are per-platform and NOT interchangeable. TikTok view
+// counts include passive feed-scroll impressions, so its vpf runs roughly
+// an order of magnitude hotter -- DISCOVERY_FOLLOWER_BANDS reflects that
+// (0.40/0.07/0.03) while FOLLOWER_BANDS is the Instagram calibration
+// (0.05/0.01/0.005) already baked into v_outliers. Judging Instagram
+// candidates against TikTok floors would fail essentially all of them.
+function resolveBand(followers: number, platform: string) {
+  const bands =
+    platform === "instagram"
+      ? (config.FOLLOWER_BANDS as readonly { name: string; maxFollowers: number; minMedianVpf: number }[])
+      : (config.DISCOVERY_FOLLOWER_BANDS as readonly { name: string; maxFollowers: number; minMedianVpf: number }[]);
+  for (const band of bands) {
     if (followers < band.maxFollowers) return band;
   }
-  return config.DISCOVERY_FOLLOWER_BANDS[config.DISCOVERY_FOLLOWER_BANDS.length - 1];
+  return bands[bands.length - 1];
 }
 
 function parseArgs() {
@@ -602,7 +610,7 @@ async function stageGate(apifyToken: string, limit: Market | undefined, confirme
 
   let query = supabase
     .from("discovery_candidates")
-    .select("candidate_id, handle, followers, market_guess")
+    .select("candidate_id, handle, followers, market_guess, platform")
     .is("gate_result", null) // hasn't been gated yet (and didn't fail cheap gates or classification)
     .in("classification", ["career_coach", "adjacent"]) // --classify must have run and approved this candidate
     .not("followers", "is", null); // needs --profile to have run first
@@ -626,30 +634,67 @@ async function stageGate(apifyToken: string, limit: Market | undefined, confirme
     console.log(`--sample=${sampleSize}: randomly sampled ${pending.length} of the full eligible pool.`);
   }
 
-  const estimatedResults = pending.length * config.DISCOVERY_GATE_MAX_POSTS_PER_CANDIDATE;
-  // 0.003/result BRONZE, same clockworks/tiktok-scraper "result" event
-  // as the search-stage estimate above (updated 2026-08-26).
-  const estimateUsd = Math.max(0.5, estimatedResults * 0.003 + 0.001);
+  // 0.003/result BRONZE for clockworks/tiktok-scraper's "result" event;
+  // apify/instagram-post-scraper runs ~0.0023/post with detailedData.
+  const ttResults = pending.filter((p) => (p.platform ?? "tiktok") === "tiktok").length * config.DISCOVERY_GATE_MAX_POSTS_PER_CANDIDATE;
+  const igResults = pending.filter((p) => p.platform === "instagram").length * config.DISCOVERY_GATE_MAX_POSTS_PER_CANDIDATE;
+  const estimateUsd = Math.max(0.5, ttResults * 0.003 + igResults * 0.0023 + 0.001);
   if (!costGate("gate", estimateUsd, confirmed)) return;
 
-  const items = await runApifyActor(
-    actors.tiktokPosts,
-    {
-      profiles: pending.map((p) => p.handle),
-      resultsPerPage: config.DISCOVERY_GATE_MAX_POSTS_PER_CANDIDATE,
-      excludePinnedPosts: true, // see stageProfile's header comment -- pinned posts contaminate recency
-    },
-    apifyToken
-  );
-  console.log(`Gate stage returned ${items.length} post item(s).`);
+  // Platform-split: different actor, different field names, and for
+  // Instagram a real distinction TikTok doesn't have -- only Video posts
+  // count toward video_posts_90d, because carousels and images have no
+  // view count and can never produce a scoreable outlier.
+  const tiktokPending = pending.filter((p) => (p.platform ?? "tiktok") === "tiktok");
+  const instagramPending = pending.filter((p) => p.platform === "instagram");
 
   const postsByHandle = new Map<string, Record<string, unknown>[]>();
-  for (const item of items) {
-    const author = (item.authorMeta ?? item.author ?? {}) as Record<string, unknown>;
-    const handle = String(author.name ?? author.uniqueId ?? item.authorHandle ?? "");
-    if (!handle) continue;
-    if (!postsByHandle.has(handle)) postsByHandle.set(handle, []);
-    postsByHandle.get(handle)!.push(item);
+
+  if (tiktokPending.length > 0) {
+    const items = await runApifyActor(
+      actors.tiktokPosts,
+      {
+        profiles: tiktokPending.map((p) => p.handle),
+        resultsPerPage: config.DISCOVERY_GATE_MAX_POSTS_PER_CANDIDATE,
+        excludePinnedPosts: true, // see stageProfile's header comment -- pinned posts contaminate recency
+      },
+      apifyToken
+    );
+    console.log(`Gate stage (tiktok) returned ${items.length} post item(s).`);
+    for (const item of items) {
+      const author = (item.authorMeta ?? item.author ?? {}) as Record<string, unknown>;
+      const handle = String(author.name ?? author.uniqueId ?? item.authorHandle ?? "");
+      if (!handle) continue;
+      if (!postsByHandle.has(handle)) postsByHandle.set(handle, []);
+      postsByHandle.get(handle)!.push(item);
+    }
+  }
+
+  if (instagramPending.length > 0) {
+    const items = await runApifyActor(
+      actors.posts,
+      {
+        username: instagramPending.map((p) => p.handle),
+        resultsLimit: config.DISCOVERY_GATE_MAX_POSTS_PER_CANDIDATE,
+        dataDetailLevel: "detailedData", // required for videoViewCount -- see actors.json
+      },
+      apifyToken
+    );
+    console.log(`Gate stage (instagram) returned ${items.length} post item(s).`);
+    for (const item of items) {
+      const handle = String(item.ownerUsername ?? "").toLowerCase();
+      if (!handle) continue;
+      // Normalised onto the keys the shared gating code below reads, so
+      // there's one code path for both platforms rather than two.
+      const normalised: Record<string, unknown> = {
+        ...item,
+        createTimeISO: item.timestamp ?? null,
+        playCount: item.videoViewCount ?? item.videoPlayCount ?? 0,
+        isVideo: String(item.type ?? "").toLowerCase() === "video",
+      };
+      if (!postsByHandle.has(handle)) postsByHandle.set(handle, []);
+      postsByHandle.get(handle)!.push(normalised);
+    }
   }
 
   const ninetyDaysAgo = Date.now() - 90 * 24 * 60 * 60 * 1000;
@@ -657,10 +702,15 @@ async function stageGate(apifyToken: string, limit: Market | undefined, confirme
   const gates = config.DISCOVERY_GATES;
 
   for (const candidate of pending) {
+    const platform = candidate.platform ?? "tiktok";
     const posts = postsByHandle.get(candidate.handle) ?? [];
     const videoPostsInWindow = posts.filter((p) => {
       const ts = Number(p.createTimeISO ? Date.parse(String(p.createTimeISO)) : Number(p.createTime) * 1000);
-      return !Number.isNaN(ts) && ts >= ninetyDaysAgo;
+      if (Number.isNaN(ts) || ts < ninetyDaysAgo) return false;
+      // Every TikTok post is a video; Instagram's are mostly not, and a
+      // carousel has no view count so it can never be scored.
+      if (platform === "instagram" && p.isVideo !== true) return false;
+      return true;
     });
 
     const lastPostTs = posts.reduce((max, p) => {
@@ -680,7 +730,7 @@ async function stageGate(apifyToken: string, limit: Market | undefined, confirme
       .sort((a, b) => a - b);
     const medianVpf = vpfs.length > 0 ? vpfs[Math.floor(vpfs.length / 2)] : null;
 
-    const band = resolveBand(followers);
+    const band = resolveBand(followers, platform);
 
     const failReasons: string[] = [];
     if (!lastPostAt || lastPostTs < thirtyDaysAgo) {
