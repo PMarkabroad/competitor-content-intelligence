@@ -89,7 +89,10 @@ export async function POST(request: NextRequest) {
     const anthropic = new Anthropic({ apiKey });
     const message = await anthropic.messages.create({
       model: "claude-sonnet-5",
-      max_tokens: 4096,
+      // 4096 truncated long scripts mid-string, producing JSON that starts
+      // valid and fails to parse. A hook + full reel script + caption needs
+      // headroom.
+      max_tokens: 8192,
       thinking: { type: "disabled" },
       system: SYSTEM_PROMPT,
       messages: [{ role: "user", content: userPrompt }],
