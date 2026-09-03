@@ -89,7 +89,7 @@ export default async function HooksPage({
               <option key={m} value={m}>{m}</option>
             ))}
           </select>
-          <button type="submit" className="rounded-md bg-brand px-3 py-1.5 text-xs font-medium text-white hover:opacity-90">
+          <button type="submit" className="rounded-md bg-text px-3 py-1.5 text-xs font-medium text-bg transition-opacity hover:opacity-85">
             Apply
           </button>
         </form>
@@ -107,7 +107,7 @@ export default async function HooksPage({
               href={`/reels/${row.post_id}`}
               className="flex items-start gap-4 px-4 py-3 hover:bg-surface-hover"
             >
-              <span className="w-14 shrink-0 pt-0.5 text-right font-semibold text-brand">
+              <span className="num w-14 shrink-0 pt-0.5 text-right text-[13px] font-semibold text-brand">
                 {formatScore(row.outlier_score)}
               </span>
               <span className="min-w-0 flex-1">

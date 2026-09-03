@@ -220,7 +220,7 @@ export default async function InsightsPage() {
             rows={patternRows.map((p) => [
               p.pattern.replace(/_/g, " "),
               p.n,
-              <span key="s" className="font-semibold text-brand">{formatScore(p.score)}</span>,
+              <span key="s" className="num font-semibold text-brand">{formatScore(p.score)}</span>,
             ])}
           />
         ) : (
@@ -242,13 +242,13 @@ export default async function InsightsPage() {
             rows={formatRows.map((f) => [
               f.format.replace(/_/g, " "),
               f.n,
-              <span key="s" className="font-semibold text-brand">{formatScore(f.score)}</span>,
+              <span key="s" className="num font-semibold text-brand">{formatScore(f.score)}</span>,
             ])}
           />
         ) : (
           <Thin>
             No video has a format set yet. {scored.length} are waiting on a visual pass — open any of
-            them from <Link href="/content-ideas" className="text-brand hover:underline">Content ideas</Link> and
+            them from <Link href="/content-ideas" className="text-text underline decoration-border underline-offset-2 hover:decoration-text">Content ideas</Link> and
             set it while you watch.
           </Thin>
         )}
@@ -264,7 +264,7 @@ export default async function InsightsPage() {
             rows={topicRows.map((t) => [
               t.topic,
               t.n,
-              <span key="s" className="font-semibold text-brand">{formatScore(t.score)}</span>,
+              <span key="s" className="num font-semibold text-brand">{formatScore(t.score)}</span>,
             ])}
           />
         ) : (
@@ -283,7 +283,7 @@ export default async function InsightsPage() {
               m.market,
               m.accounts,
               m.n,
-              <span key="s" className="font-semibold text-brand">{formatScore(m.score)}</span>,
+              <span key="s" className="num font-semibold text-brand">{formatScore(m.score)}</span>,
               formatVpf(m.vpf),
             ])}
           />
@@ -303,7 +303,7 @@ export default async function InsightsPage() {
               g.topic,
               g.accounts,
               g.n,
-              <span key="s" className="font-semibold text-brand">{formatScore(g.score)}</span>,
+              <span key="s" className="num font-semibold text-brand">{formatScore(g.score)}</span>,
             ])}
           />
         ) : (
@@ -323,7 +323,7 @@ export default async function InsightsPage() {
                 href={`/reels/${h.post_id}`}
                 className="flex items-baseline gap-3 px-3 py-2.5 text-xs hover:bg-surface-hover"
               >
-                <span className="w-14 shrink-0 font-semibold text-brand">{formatScore(h.outlier_score ?? 0)}</span>
+                <span className="num w-14 shrink-0 font-semibold text-brand">{formatScore(h.outlier_score ?? 0)}</span>
                 <span className="flex-1 text-text">{h.sub_topic ?? "untitled"}</span>
                 <span className="shrink-0 text-faint">
                   {h.hook_pattern?.replace(/_/g, " ")} · {h.competitors?.market}

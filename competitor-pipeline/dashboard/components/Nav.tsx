@@ -54,10 +54,11 @@ function NavLink({ href, label, active }: { href: string; label: string; active:
     <Link
       href={href}
       aria-current={active ? "page" : undefined}
-      className={`rounded-lg px-3 py-2 text-[13px] transition-colors ${
-        active
-          ? "bg-brand font-medium text-white"
-          : "text-dim hover:bg-surface-hover hover:text-text"
+      // Active state is ink, not the accent: the accent is reserved for
+      // performance figures, and a coloured nav item competes with the
+      // numbers it's meant to lead you to.
+      className={`rounded-md px-3 py-1.5 text-[13px] transition-colors ${
+        active ? "bg-text font-medium text-bg" : "text-dim hover:bg-surface-hover hover:text-text"
       }`}
     >
       {label}

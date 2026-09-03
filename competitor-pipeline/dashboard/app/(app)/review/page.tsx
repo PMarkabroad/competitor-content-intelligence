@@ -103,7 +103,7 @@ export default async function ReviewPage({
               <input type="checkbox" name="showExcluded" value="1" defaultChecked={showExcluded} />
               Show excluded
             </label>
-            <button type="submit" className="rounded-md bg-brand px-3 py-1.5 text-xs font-medium text-white transition-opacity hover:opacity-90">
+            <button type="submit" className="rounded-md bg-text px-3 py-1.5 text-xs font-medium text-bg transition-opacity hover:opacity-85">
               Apply
             </button>
           </form>
@@ -136,7 +136,7 @@ export default async function ReviewPage({
                   className={`border-b border-border align-top hover:bg-surface-hover ${isExcluded ? "opacity-40" : ""}`}
                 >
                   <td className="px-2 py-2">
-                    <a href={profileUrl(row)} target="_blank" rel="noreferrer" className="font-medium text-brand hover:underline">
+                    <a href={profileUrl(row)} target="_blank" rel="noreferrer" className="font-medium text-text underline decoration-border underline-offset-2 hover:decoration-text">
                       {row.handle}
                     </a>
                     <div className="text-faint">{row.display_name}</div>

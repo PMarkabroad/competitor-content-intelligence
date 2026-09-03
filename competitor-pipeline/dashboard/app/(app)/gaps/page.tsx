@@ -66,11 +66,11 @@ export default async function GapsPage() {
             {gaps.map((g) => (
               <tr key={g.topic} className="border-b border-border last:border-b-0">
                 <td className="px-2 py-2 text-text">{g.topic}</td>
-                <td className="px-2 py-2 text-right font-semibold text-brand">{formatScore(g.avgScore)}</td>
+                <td className="num px-2 py-2 text-right font-semibold text-brand">{formatScore(g.avgScore)}</td>
                 <td className="px-2 py-2 text-right">{g.competitorCount}</td>
                 <td className="px-2 py-2">
                   {g.rows.slice(0, 3).map((r) => (
-                    <Link key={r.hook_id} href={`/reels/${r.post_id}`} className="mr-2 text-brand hover:underline">post →</Link>
+                    <Link key={r.hook_id} href={`/reels/${r.post_id}`} className="mr-2 text-text underline decoration-border underline-offset-2 hover:decoration-text">post →</Link>
                   ))}
                 </td>
               </tr>

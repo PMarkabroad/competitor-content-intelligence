@@ -82,7 +82,7 @@ export function SortablePostsTable({ posts }: { posts: PostRow[] }) {
           {sorted.map((p) => (
             <tr key={p.post_id} className="border-b border-border last:border-b-0 hover:bg-surface-hover">
               <td className="px-2 py-1.5">
-                <Link href={`/reels/${p.post_id}`} className="text-brand hover:underline">
+                <Link href={`/reels/${p.post_id}`} className="text-text underline decoration-border underline-offset-2 hover:decoration-text">
                   {p.post_type ?? "post"}
                 </Link>
                 {p.post_url && (

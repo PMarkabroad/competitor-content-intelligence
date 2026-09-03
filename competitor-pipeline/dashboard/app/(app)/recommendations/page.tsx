@@ -84,7 +84,7 @@ export default async function RecommendationsPage() {
 
       <div className="panel mb-4 p-5">
         <p className="mb-2 text-sm text-text">
-          Lead with <span className="font-semibold text-brand">{bestPattern[0]}</span> on <span className="font-semibold text-brand">{bestGap.topic}</span>.
+          Lead with <span className="font-semibold text-text">{bestPattern[0]}</span> on <span className="font-semibold text-text">{bestGap.topic}</span>.
         </p>
         <p className="mb-3 text-xs text-dim">
           {bestPattern[0]} averages {formatScore(avg(bestPattern[1]))} across {bestPattern[1].length} tagged hooks. {bestGap.topic} averages{" "}
@@ -92,7 +92,7 @@ export default async function RecommendationsPage() {
         </p>
         <div className="flex flex-wrap gap-2">
           {[...bestPattern[1].slice(0, 3), ...bestGap.rows.slice(0, 3)].map((r) => (
-            <Link key={r.hook_id} href={`/reels/${r.post_id}`} className="rounded-md border border-border px-2 py-1 text-xs text-brand hover:bg-surface-hover">
+            <Link key={r.hook_id} href={`/reels/${r.post_id}`} className="rounded-md border border-border px-2 py-1 text-xs text-dim hover:bg-surface-hover hover:text-text">
               evidence: post →
             </Link>
           ))}

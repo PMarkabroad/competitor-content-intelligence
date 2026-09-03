@@ -61,7 +61,7 @@ function Stage({
   const body = (
     <>
       <span
-        className={`block text-[24px] font-semibold leading-none tracking-tight tabular-nums ${
+        className={`num block text-[24px] font-semibold leading-none ${
           emphasis ? "text-brand" : "text-text"
         }`}
       >
@@ -73,7 +73,7 @@ function Stage({
   return (
     <div className="flex-1 px-4 py-4 first:pl-5 last:pr-5">
       {href ? (
-        <Link href={href} className="block rounded transition-colors hover:text-brand">
+        <Link href={href} className="block rounded transition-opacity hover:opacity-70">
           {body}
         </Link>
       ) : (
@@ -211,13 +211,13 @@ export default async function HomePage() {
                 <span className="text-[13px] text-text">{p.name}</span>
                 <span className="shrink-0 text-xs text-faint">
                   {p.n} video{p.n === 1 ? "" : "s"}
-                  <span className="ml-3 text-[15px] font-semibold text-brand">{formatScore(p.score)}</span>
+                  <span className="num ml-3 text-[15px] font-semibold text-brand">{formatScore(p.score)}</span>
                 </span>
               </div>
             ))}
             {topPatterns.length === 0 && <p className="px-4 py-3 text-xs text-dim">Nothing tagged yet.</p>}
           </div>
-          <Link href="/insights" className="mt-2 inline-block text-[11px] text-brand hover:underline">
+          <Link href="/insights" className="mt-2 inline-block text-[11px] text-dim underline decoration-border underline-offset-2 hover:text-text">
             All patterns and gaps
           </Link>
         </div>
@@ -230,13 +230,13 @@ export default async function HomePage() {
                 <span className="text-[13px] text-text">{s.name}</span>
                 <span className="shrink-0 text-xs text-faint">
                   {s.n} video{s.n === 1 ? "" : "s"}
-                  <span className="ml-3 text-[15px] font-semibold text-brand">{formatScore(s.score)}</span>
+                  <span className="num ml-3 text-[15px] font-semibold text-brand">{formatScore(s.score)}</span>
                 </span>
               </div>
             ))}
             {topShapes.length === 0 && <p className="px-4 py-3 text-xs text-dim">Nothing tagged yet.</p>}
           </div>
-          <Link href="/formats" className="mt-2 inline-block text-[11px] text-brand hover:underline">
+          <Link href="/formats" className="mt-2 inline-block text-[11px] text-dim underline decoration-border underline-offset-2 hover:text-text">
             How each shape runs
           </Link>
         </div>
@@ -252,7 +252,7 @@ export default async function HomePage() {
               href={`/reels/${h.post_id}`}
               className="flex items-start gap-4 px-4 py-2.5 hover:bg-surface-hover"
             >
-              <span className="w-14 shrink-0 text-right text-xs font-semibold text-brand">
+              <span className="num w-14 shrink-0 text-right text-[13px] font-semibold text-brand">
                 {formatScore(h.outlier_score)}
               </span>
               <span className="min-w-0 flex-1">
@@ -269,7 +269,7 @@ export default async function HomePage() {
             <p className="px-4 py-3 text-xs text-dim">No hooks tagged yet.</p>
           )}
         </div>
-        <Link href="/hooks" className="mt-2 inline-block text-[11px] text-brand hover:underline">
+        <Link href="/hooks" className="mt-2 inline-block text-[11px] text-dim underline decoration-border underline-offset-2 hover:text-text">
           Every hook line
         </Link>
       </section>
@@ -298,7 +298,7 @@ export default async function HomePage() {
             </p>
           )}
         </div>
-        <Link href="/drafts" className="mt-2 inline-block text-[11px] text-brand hover:underline">
+        <Link href="/drafts" className="mt-2 inline-block text-[11px] text-dim underline decoration-border underline-offset-2 hover:text-text">
           All {drafts} posts
         </Link>
       </section>

@@ -87,13 +87,13 @@ export default async function OutliersPage() {
                   <td className="px-2 py-1.5 text-right">{formatNumber(row.views)}</td>
                   <td className="px-2 py-1.5 text-right font-medium">{formatVpf(row.vpf)}</td>
                   <td className="px-2 py-1.5 text-right text-dim">{formatVpf(row.baseline_median_vpf)}</td>
-                  <td className="px-2 py-1.5 text-right font-semibold text-brand">{formatScore(row.outlier_score)}</td>
+                  <td className="num px-2 py-1.5 text-right font-semibold text-brand">{formatScore(row.outlier_score)}</td>
                   <td className="px-2 py-1.5">
                     <Badge tone={transcribed ? "good" : "neutral"}>{transcribed ? "transcribed" : "pending"}</Badge>
                   </td>
                   <td className="px-2 py-1.5">
                     {post?.post_url && (
-                      <a href={post.post_url} target="_blank" rel="noreferrer" className="text-brand hover:underline">
+                      <a href={post.post_url} target="_blank" rel="noreferrer" className="text-text underline decoration-border underline-offset-2 hover:decoration-text">
                         View →
                       </a>
                     )}

@@ -86,7 +86,7 @@ export default async function FormatsPage() {
                 </td>
                 <td className="px-3 py-2 text-dim">{f.blurb}</td>
                 <td className="px-3 py-2 text-right">{f.count}</td>
-                <td className="px-3 py-2 text-right font-semibold text-brand">{formatScore(f.score)}</td>
+                <td className="num px-3 py-2 text-right font-semibold text-brand">{formatScore(f.score)}</td>
               </tr>
             ))}
           </tbody>
@@ -109,7 +109,7 @@ export default async function FormatsPage() {
                 href={`/reels/${r.post_id}`}
                 className="flex items-start gap-4 px-4 py-2.5 hover:bg-surface-hover"
               >
-                <span className="w-14 shrink-0 text-right font-semibold text-brand">
+                <span className="num w-14 shrink-0 text-right text-[13px] font-semibold text-brand">
                   {formatScore(r.outlier_score)}
                 </span>
                 <span className="min-w-0 flex-1">

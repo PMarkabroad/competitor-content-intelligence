@@ -111,7 +111,7 @@ export default async function StatusPage() {
               return (
                 <tr key={r.competitor_id} className="border-b border-border last:border-b-0">
                   <td className="px-2 py-1">
-                    <Link href={`/competitors/${r.handle}`} className="text-brand hover:underline">
+                    <Link href={`/competitors/${r.handle}`} className="text-text underline decoration-border underline-offset-2 hover:decoration-text">
                       {r.handle}
                     </Link>
                   </td>

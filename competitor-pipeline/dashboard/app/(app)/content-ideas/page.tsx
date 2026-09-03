@@ -242,7 +242,7 @@ export default async function ContentIdeasPage() {
                     <p className="text-sm font-medium text-text">
                       {card.kind === "tagged" ? `\u201C${card.headline}\u201D` : `"${card.headline.slice(0, 120)}${card.headline.length > 120 ? "\u2026" : ""}"`}
                     </p>
-                    <span className="shrink-0 font-mono text-sm font-semibold text-brand">{formatScore(card.outlier_score)}</span>
+                    <span className="num shrink-0 text-sm font-semibold text-brand">{formatScore(card.outlier_score)}</span>
                   </div>
                   <p className="mb-2 text-[11px] text-faint">
                     {card.draftPayload.competitor_name} · {market}
@@ -285,7 +285,7 @@ export default async function ContentIdeasPage() {
 
                   <div className="mt-auto flex items-center justify-between gap-2 border-t border-border pt-2">
                     {card.post_url ? (
-                      <a href={card.post_url} target="_blank" rel="noreferrer" className="text-xs text-brand hover:underline">Original post →</a>
+                      <a href={card.post_url} target="_blank" rel="noreferrer" className="text-xs text-text underline decoration-border underline-offset-2 hover:decoration-text">Original post →</a>
                     ) : <span />}
                     <CopyDumpButton text={card.copyDumpText} />
                   </div>

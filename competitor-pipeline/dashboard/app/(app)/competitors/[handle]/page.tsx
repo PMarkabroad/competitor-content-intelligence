@@ -131,7 +131,7 @@ export default async function CompetitorDetailPage({
           <div className="grid grid-cols-3 gap-3">
             {bestPosts.map((p) => (
               <Link key={p.post_id} href={`/reels/${p.post_id}`} className="block rounded-md border border-border p-3 transition-colors hover:bg-surface-hover">
-                <p className="mb-1 text-lg font-semibold text-brand">{p.outlier_score?.toFixed(1)}x</p>
+                <p className="num mb-1 text-lg font-semibold text-brand">{p.outlier_score?.toFixed(1)}x</p>
                 <p className="text-[11px] text-dim">{formatDate(p.posted_at)} · {formatNumber(p.views)} views</p>
               </Link>
             ))}

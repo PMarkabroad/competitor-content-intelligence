@@ -56,7 +56,7 @@ export default async function ReelDetailPage({ params }: { params: Promise<{ pos
         <div className="col-span-2">
           <div className="mb-2 flex flex-wrap items-center gap-2">
             {competitor && (
-              <Link href={`/competitors/${competitor.handle}`} className="text-sm font-semibold text-brand hover:underline">
+              <Link href={`/competitors/${competitor.handle}`} className="text-sm font-semibold text-text underline decoration-border underline-offset-2 hover:decoration-text">
                 {competitor.name}
               </Link>
             )}
@@ -64,7 +64,7 @@ export default async function ReelDetailPage({ params }: { params: Promise<{ pos
             {competitor && <Badge tone="brand">{competitor.tier}</Badge>}
             <span className="text-xs text-faint">{formatDate(post.posted_at)}</span>
             {post.post_url && (
-              <a href={post.post_url} target="_blank" rel="noreferrer" className="text-xs text-brand hover:underline">
+              <a href={post.post_url} target="_blank" rel="noreferrer" className="text-xs text-text underline decoration-border underline-offset-2 hover:decoration-text">
                 Original ↗
               </a>
             )}
@@ -95,7 +95,7 @@ export default async function ReelDetailPage({ params }: { params: Promise<{ pos
 
           <div className="mb-3 flex gap-3 text-xs">
             <span className="text-dim">VPF <span className="font-medium text-text">{formatVpf(vpf)}</span></span>
-            {outlierRow && <span className="text-dim">Outlier score <span className="font-semibold text-brand">{formatScore(outlierRow.outlier_score)}</span></span>}
+            {outlierRow && <span className="text-dim">Outlier score <span className="num font-semibold text-brand">{formatScore(outlierRow.outlier_score)}</span></span>}
             {post.paid_partnership && <Badge tone="warn">paid partnership</Badge>}
             {post.is_repost && <Badge tone="neutral">repost</Badge>}
           </div>
@@ -150,7 +150,7 @@ export default async function ReelDetailPage({ params }: { params: Promise<{ pos
         <div className="panel p-4">
           <p className="mb-3 text-xs font-semibold uppercase text-faint">Not yet tagged</p>
           <details>
-            <summary className="cursor-pointer text-xs text-brand hover:underline">Tag this hook</summary>
+            <summary className="cursor-pointer text-xs text-dim underline decoration-border underline-offset-2 hover:text-text">Tag this hook</summary>
             <form action={tagHook} className="mt-3 grid grid-cols-2 gap-3">
               <input type="hidden" name="post_id" value={post.post_id} />
               <input type="hidden" name="competitor_id" value={post.competitor_id} />
@@ -229,7 +229,7 @@ export default async function ReelDetailPage({ params }: { params: Promise<{ pos
                 Why it performed (human-written, max 2 sentences -- never auto-generated)
                 <textarea name="why_it_performed" rows={2} className="mt-1 w-full rounded-md border border-border bg-bg px-2 py-1.5 text-xs text-text" />
               </label>
-              <button type="submit" className="col-span-2 rounded-md bg-brand px-3 py-1.5 text-xs font-medium text-white transition-opacity hover:opacity-90">
+              <button type="submit" className="col-span-2 rounded-md bg-text px-3 py-1.5 text-xs font-medium text-bg transition-opacity hover:opacity-85">
                 Save tag
               </button>
             </form>

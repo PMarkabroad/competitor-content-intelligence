@@ -1,37 +1,45 @@
 @import "tailwindcss";
 
-/* Light, cool-neutral ground with an indigo brand.
-   Why light: this tool is almost entirely text -- hook lines, transcripts,
-   scripts, brand-fit notes, dense tables. Long text at 11-13px on a
-   near-black ground is measurably harder to scan, and scanning is the
-   whole job here.
-   The ground is very slightly cool so white panels lift off it cleanly.
-   A first pass used a warm ground with a petrol accent; it read washed
-   out, the accent had no presence against the warmth, and the pairing
-   drifted toward the cream-and-clay palette that every generated
-   dashboard lands on.
-   Indigo carries the outlier scores, which are the point of the product.
-   It has enough saturation to read as deliberate on white without being
-   the default SaaS blue. */
+/* Near-monochrome, one accent, and the accent only ever marks a
+   performance number.
+
+   The design brief here is the brand's own voice document: "Short.
+   Stacked. Declarative." / "Numbers, always. Never 'a lot' or 'many'." /
+   "Open cold. No preamble." This interface is held to the same rules the
+   content is. So: type does the work, colour is not decoration, and the
+   only thing that gets emphasis -- size, weight, or hue -- is a figure.
+
+   Earlier passes here were a dark theme, then a warm ground with a petrol
+   accent, then a cool ground with indigo. All three were variations on the
+   same generic dashboard: coloured chrome around grey data. The problem
+   was never which hue; it was that everything competed. */
 @theme {
-  --color-bg: #f7f8fa;
+  --color-bg: #fbfbf9;
   --color-surface: #ffffff;
-  --color-surface-hover: #f2f4f8;
-  --color-border: #e4e7ee;
-  --color-border-strong: #c8ccd8;
-  --color-brand: #4b3be4;
-  --color-brand-soft: #4b3be414;
-  --color-text: #14151a;
-  --color-dim: #52566a;
-  --color-faint: #858a9c;
-  --color-good: #15734a;
-  --color-good-soft: #15734a14;
-  --color-warn: #96620a;
-  --color-warn-soft: #96620a14;
-  --color-bad: #a92b22;
-  --color-bad-soft: #a92b2214;
-  --font-sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
-  --font-mono: ui-monospace, "SF Mono", "Cascadia Code", Consolas, monospace;
+  --color-surface-hover: #f4f4f0;
+  --color-border: #e6e5e0;
+  --color-border-strong: #cdccc4;
+
+  /* Vermilion. Reserved for outlier scores and the single primary action.
+     It is never used to decorate a heading, a badge, or a nav item. */
+  --color-brand: #d6402b;
+  --color-brand-soft: #d6402b12;
+
+  --color-text: #101014;
+  --color-dim: #6b6b73;
+  --color-faint: #9a9aa0;
+
+  /* Status hues are deliberately desaturated so they read as annotation
+     and never compete with the accent for attention. */
+  --color-good: #3f6b4a;
+  --color-good-soft: #3f6b4a12;
+  --color-warn: #8a6a2a;
+  --color-warn-soft: #8a6a2a12;
+  --color-bad: #9c4a41;
+  --color-bad-soft: #9c4a4112;
+
+  --font-sans: var(--font-plex-sans), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: var(--font-plex-mono), ui-monospace, monospace;
 }
 
 html {
@@ -42,11 +50,19 @@ body {
   background: var(--color-bg);
   color: var(--color-text);
   font-family: var(--font-sans);
-  /* Was 13px, which is cramped for the amount of prose on these screens. */
   font-size: 14px;
   line-height: 1.5;
   -webkit-font-smoothing: antialiased;
   text-rendering: optimizeLegibility;
+}
+
+/* Every figure in the product is tabular, so columns of scores line up
+   down the page without per-component effort. */
+.num {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum";
+  letter-spacing: -0.02em;
 }
 
 table {
@@ -54,8 +70,8 @@ table {
 }
 
 ::selection {
-  background: var(--color-brand);
-  color: #fff;
+  background: var(--color-text);
+  color: var(--color-bg);
 }
 
 a {
@@ -65,10 +81,16 @@ a {
 h1,
 h2,
 h3 {
-  letter-spacing: -0.015em;
+  letter-spacing: -0.018em;
+  font-weight: 600;
 }
 
-/* Dense scrollbars -- this is a data tool, not a marketing page. */
+:focus-visible {
+  outline: 2px solid var(--color-text);
+  outline-offset: 2px;
+  border-radius: 3px;
+}
+
 ::-webkit-scrollbar {
   width: 10px;
   height: 10px;
@@ -85,14 +107,14 @@ h3 {
   background: var(--color-faint);
 }
 
-/* Shared card treatment. On a light ground the old inset highlight and
-   heavy drop shadow just muddy it -- a hairline border plus a very soft
-   lift is enough to separate white from the warm ground. */
+/* A panel is a hairline and a white ground -- no shadow, no lift. Boxes
+   stacked with drop shadows are the SaaS-card default and they make a
+   dense data screen read as busier than it is. Separation here comes from
+   whitespace and rules. */
 .panel {
   background: var(--color-surface);
   border: 1px solid var(--color-border);
-  border-radius: 10px;
-  box-shadow: 0 1px 2px 0 rgba(23, 23, 26, 0.04);
+  border-radius: 8px;
 }
 
 .data-table thead th {
@@ -106,54 +128,46 @@ h3 {
   transition: background-color 120ms ease;
 }
 
-/* Rendered markdown for /reports -- generated from our own report
-   files (see out/hook_report_*.md), not third-party/user content. */
+/* Rendered markdown for /reports -- generated from our own report files
+   (see out/hook_report_*.md), not third-party/user content. */
 .report-markdown {
-  /* Reports are the longest prose in the product; hold them to a readable
-     measure instead of letting lines run the full width. */
-  max-width: 74ch;
+  max-width: 72ch;
 }
 .report-markdown h1 {
-  margin: 0 0 0.75rem;
-  font-size: 1.3rem;
-  font-weight: 600;
-  color: var(--color-text);
-  letter-spacing: -0.02em;
+  margin: 0 0 1rem;
+  font-size: 1.5rem;
+  letter-spacing: -0.025em;
 }
 .report-markdown h2 {
-  margin: 1.75rem 0 0.5rem;
-  font-size: 1.05rem;
-  font-weight: 600;
-  color: var(--color-text);
+  margin: 2rem 0 0.6rem;
+  font-size: 1.1rem;
 }
 .report-markdown h3 {
-  margin: 1.25rem 0 0.4rem;
-  font-size: 0.92rem;
-  font-weight: 600;
-  color: var(--color-text);
+  margin: 1.4rem 0 0.4rem;
+  font-size: 0.95rem;
 }
 .report-markdown p {
-  margin: 0 0 0.85rem;
-  line-height: 1.6;
+  margin: 0 0 0.9rem;
+  line-height: 1.65;
 }
 .report-markdown ul,
 .report-markdown ol {
-  margin: 0 0 0.85rem 1.25rem;
+  margin: 0 0 0.9rem 1.25rem;
 }
 .report-markdown li {
-  margin-bottom: 0.3rem;
-  line-height: 1.55;
+  margin-bottom: 0.35rem;
+  line-height: 1.6;
 }
 .report-markdown strong {
-  color: var(--color-text);
   font-weight: 600;
 }
 .report-markdown a {
-  color: var(--color-brand);
+  color: var(--color-text);
   text-decoration: underline;
+  text-underline-offset: 2px;
 }
 .report-markdown hr {
-  margin: 1.75rem 0;
+  margin: 2rem 0;
   border: none;
   border-top: 1px solid var(--color-border);
 }
@@ -167,13 +181,13 @@ h3 {
 .report-markdown table {
   width: 100%;
   border-collapse: collapse;
-  margin: 0 0 1rem;
+  margin: 0 0 1.2rem;
   font-size: 0.9em;
 }
 .report-markdown th,
 .report-markdown td {
   border-bottom: 1px solid var(--color-border);
-  padding: 0.4rem 0.6rem;
+  padding: 0.45rem 0.7rem;
   text-align: left;
 }
 .report-markdown th {

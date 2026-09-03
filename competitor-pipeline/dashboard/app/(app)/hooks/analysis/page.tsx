@@ -54,7 +54,7 @@ export default async function HookAnalysisPage() {
                 <tr key={pattern} className="border-b border-border last:border-b-0">
                   <td className="px-2 py-2 text-text">{pattern}</td>
                   <td className="px-2 py-2 text-right">{rows.length}</td>
-                  <td className="px-2 py-2 text-right font-semibold text-brand">{formatScore(avg(rows.map((r) => r.outlier_score ?? 0)))}</td>
+                  <td className="num px-2 py-2 text-right font-semibold text-brand">{formatScore(avg(rows.map((r) => r.outlier_score ?? 0)))}</td>
                   <td className="px-2 py-2 text-right">{formatVpf(avg(rows.map((r) => r.vpf ?? 0)))}</td>
                 </tr>
               ))}

@@ -119,7 +119,7 @@ export default async function CompetitorsPage({
             <option value="">All tiers</option>
             {TIERS.map((t) => <option key={t} value={t}>{t}</option>)}
           </select>
-          <button type="submit" className="rounded-md bg-brand px-3 py-1.5 text-xs font-medium text-white transition-opacity hover:opacity-90">Apply</button>
+          <button type="submit" className="rounded-md bg-text px-3 py-1.5 text-xs font-medium text-bg transition-opacity hover:opacity-85">Apply</button>
         </form>
       </div>
 
@@ -144,13 +144,13 @@ export default async function CompetitorsPage({
               return (
                 <tr key={r.competitor_id} className="border-b border-border last:border-b-0 hover:bg-surface-hover">
                   <td className="px-2 py-2">
-                    <Link href={`/competitors/${r.handle}`} className="font-medium text-brand hover:underline">{r.handle}</Link>
+                    <Link href={`/competitors/${r.handle}`} className="font-medium text-text underline decoration-border underline-offset-2 hover:decoration-text">{r.handle}</Link>
                     <div className="text-faint">{r.name} · {r.platform} · {r.tier}</div>
                   </td>
                   <td className="px-2 py-2 text-dim">{r.market}</td>
                   <td className="px-2 py-2 text-right">
                     {r.usable_hooks > 0 ? (
-                      <span className="font-semibold text-brand">{r.usable_hooks}</span>
+                      <span className="num font-semibold text-brand">{r.usable_hooks}</span>
                     ) : (
                       <span className="text-faint">0</span>
                     )}

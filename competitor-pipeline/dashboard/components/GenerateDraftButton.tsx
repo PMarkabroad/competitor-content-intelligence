@@ -91,7 +91,7 @@ export function GenerateDraftButton({ payload }: { payload: DraftPayload }) {
         type="button"
         onClick={handleGenerate}
         disabled={loading}
-        className="rounded bg-brand px-2 py-1 text-xs font-medium text-white hover:opacity-90 disabled:opacity-50"
+        className="rounded bg-text px-2 py-1 text-xs font-medium text-bg transition-opacity hover:opacity-85 disabled:opacity-50"
       >
         {loading ? "Generating…" : "Generate Ark draft"}
       </button>
