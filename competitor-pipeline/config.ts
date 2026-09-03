@@ -298,7 +298,13 @@ export const config = {
   // reasoning further below, which was checked against the wrong
   // account (see the CORRECTION note above) -- kept only as a record of
   // that history, not current.
-  MONTHLY_APIFY_SPEND_CAP_USD: 25,
+  // Raised to 29 on 2026-09-03 at the user's request. NOTE: 29 IS the
+  // real Apify ceiling for this plan, so unlike the earlier 15 and 25
+  // this leaves NO buffer -- the guard now fires exactly where Apify
+  // starts billing overage rather than before it. Deliberate, but it
+  // means a single run that overshoots its estimate can spill past the
+  // included compute.
+  MONTHLY_APIFY_SPEND_CAP_USD: 29,
 
   /**
    * Per-item cost estimates used only for the spend-guard check, not
