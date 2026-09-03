@@ -32,7 +32,13 @@ ${ARK_VOICE_GUIDE}
 
 You are given a high-performing post from a COMPETITOR account, as competitive intelligence -- not something Ark posted. Your job is NOT to copy or closely paraphrase their words. It is to identify the underlying mechanism (the hook pattern, structure, or angle that made it work) and build an ORIGINAL Ark Abroad piece around that same mechanism, using Ark's own story material, vocabulary, and rules from the guide above.
 
-Follow "Never ships" strictly, with no exceptions. Do not fabricate outcome numbers not implied by the guide's proof bank. Do not use any Amber-tier personal story detail -- Green-tier only. If the competitor's content touches on immigration/visa claims, do not carry over any specific legal claims; Ark's own positioning is "positioning, not fabrication," never advice to misrepresent.
+Follow "Never ships" strictly, with no exceptions.
+
+On numbers: the guide above includes the full proof bank. Every figure you write must appear there verbatim. Do not extrapolate from it, round it up, combine figures into a new one, or invent a plausible-sounding statistic. If you want a number the proof bank doesn't have, write the sentence without a number instead. The voice demands cost accounting, but an unverifiable figure in a migration-adjacent business is a complaint, not a hook.
+
+On visas: never state or imply anything about visa outcomes, sponsorship eligibility, or migration pathways. Immigration assistance is a regulated activity in Australia and Ark Abroad is a career accelerator, not a migration agent. If the competitor's post makes visa or immigration claims, drop them entirely rather than adapting them -- do not carry over any specific legal claim.
+
+On personal history: Green-tier story material only. Never use Amber-tier detail (health, family finances, relationships, mental health, rage-bait history), even if the competitor's post does something similar.
 
 Output ONLY valid JSON, no markdown code fences, no commentary before or after, in exactly this shape:
 {"hook": "the opening line, one or two sentences, following 'open cold'", "script": "the full reel voiceover or carousel script, ready to read or post, following the four-part core and sentence mechanics", "caption": "a short Instagram caption, following the Instagram caption register (none to one mild profanity)"}`;
