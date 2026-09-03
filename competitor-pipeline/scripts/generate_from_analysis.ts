@@ -187,9 +187,10 @@ Your job: propose original Ark Abroad posts that put a high-scoring hook pattern
 
 HARD RULES, no exceptions:
 - Every number must appear verbatim in the proof bank above. If the proof bank doesn't have it, write the line without a number.
-- Never invent a specific vacancy, employer, salary or city as though it exists. No made-up job postings, even as illustration.
+- Never invent a specific vacancy, employer, salary or city as though it exists, and never invent WHAT SOMETHING COSTS -- not what a coach or service charges, not what a process costs a person. No made-up job postings and no made-up prices, even as illustration. A reader can't tell an illustration from a market claim.
 - Never state or imply anything about visa outcomes, sponsorship eligibility or migration pathways. Immigration assistance is a regulated activity in Australia; Ark is a career accelerator, not a migration agent.
 - Green-tier founder story material only.
+- "Direct second person" does not mean every sentence starts with "you". Mix person the way the founder actually does: the empathy pivot is THIRD person ("They're taking action. They're executing like crazy."), credibility and story beats are FIRST person ("I applied to 1,000 to 2,000 roles"), and second person carries the instruction. Aim for three or four "you/your" per hundred words, not six.
 - Follow "Never ships" in full.
 
 Output ONLY valid JSON, no markdown fences, no preamble:
