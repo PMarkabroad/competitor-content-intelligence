@@ -27,10 +27,19 @@ const PRIMARY_LINKS: { href: string; label: string }[] = [
   { href: "/drafts", label: "Ready-made posts" },
 ];
 
+// Removed from the nav on request, routes deliberately left alive:
+//   /transcripts  -- phrase mining whose output was dominated by English
+//                    stopword bigrams ("want to", "lot of"); individual
+//                    transcripts are already on /reels/[post_id] in context
+//   /outliers     -- the transcription queue, an operational view of what
+//                    would be spent on next; the scripts report the same
+//   /review       -- approves discovery candidates into the roster. This is
+//                    the ONLY way to promote a new competitor from the
+//                    dashboard, so it has to come back (or be run from the
+//                    CLI) if another discovery sweep is ever run. It's dead
+//                    weight only while the funnel is drained, which it is.
+// All three still work if you navigate to them directly.
 const MORE_LINKS: { href: string; label: string }[] = [
-  { href: "/review", label: "Review new accounts" },
-  { href: "/outliers", label: "Transcription queue" },
-  { href: "/transcripts", label: "Transcripts" },
   { href: "/reports", label: "Monthly reports" },
   { href: "/status", label: "Status" },
   { href: "/data", label: "Raw tables" },

@@ -179,7 +179,10 @@ export default async function HomePage() {
 
         <Pipeline title="What their content becomes">
           <Stage value={posts} label="posts collected" />
-          <Stage value={transcripts} label="transcribed" href="/transcripts" />
+          {/* Not linked: /transcripts is off the nav, and a raw transcript
+              list isn't somewhere to send anyone. The count still matters
+              as a pipeline stage. */}
+          <Stage value={transcripts} label="transcribed" />
           <Stage value={hookCount} label="hooks tagged" href="/hooks" />
           <Stage value={drafts} label="ready to post" href="/drafts" emphasis />
         </Pipeline>
