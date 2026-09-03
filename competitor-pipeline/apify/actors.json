@@ -4,7 +4,11 @@
     "build": "0.0.587",
     "pinnedAt": "2026-08-25",
     "verifiedVia": "GET https://api.apify.com/v2/acts/apify~instagram-profile-scraper -- confirmed this exact build (buildNumberInt 587) is the actor's own 'latest' tag as of pin date",
-    "input": { "usernames": ["<handle>"] },
+    "input": {
+      "usernames": [
+        "<handle>"
+      ]
+    },
     "_comment": "Fetches a single account's profile snapshot: follower count, following count, post count, bio, plus up to 12 latest posts. Output maps to competitor_snapshots (followersCount, followsCount, postsCount, biography). Already used ad-hoc this session for the verification worksheet (out/verification_worksheet.csv, source_actor column) -- 133K+ users on the actor, official apify/ namespace. Every call MUST pass build=0.0.587 explicitly (via the API's `build` query param), never rely on the actor's own 'latest' tag, which will silently drift to a newer build over time."
   },
   "posts": {
@@ -12,7 +16,14 @@
     "build": "0.0.579",
     "pinnedAt": "2026-08-25",
     "verifiedVia": "GET https://api.apify.com/v2/acts/apify~instagram-post-scraper -- confirmed this exact build (buildNumberInt 579) is the actor's own 'latest' tag as of pin date",
-    "input": { "username": ["<handle>"], "resultsLimit": 20, "onlyPostsNewerThan": "<since-date-or-relative>", "dataDetailLevel": "detailedData" },
+    "input": {
+      "username": [
+        "<handle>"
+      ],
+      "resultsLimit": 20,
+      "onlyPostsNewerThan": "<since-date-or-relative>",
+      "dataDetailLevel": "detailedData"
+    },
     "_comment": "Fetches recent posts for an account: caption, timestamp, likesCount, commentsCount, videoViewCount/type, across all post types (image/carousel/video), not reels-only. resultsLimit maps to posts_per_run; onlyPostsNewerThan maps to the last_scraped_at watermark in build_run_input.ts. dataDetailLevel MUST be detailedData -- confirmed via smoke_test.ts on 2026-08-25 that basicData omits video view count entirely (no videoViewCount/videoPlayCount field at all, even for Video/clips posts), which makes vpf permanently null. detailedData is a paid add-on (BRONZE-tier pricing as of 2026-08-26: ~$0.0008/post extra on top of ~$0.0015/post base; was ~$0.001 on ~$0.0017 at FREE before the org account's real plan was confirmed), trivial at this pipeline's scale. Every call MUST pass build=0.0.579 explicitly, never 'latest'."
   },
   "transcript": {
@@ -20,7 +31,12 @@
     "build": "0.0.549",
     "pinnedAt": "2026-08-25",
     "verifiedVia": "GET https://api.apify.com/v2/acts/apify~instagram-reel-scraper -- confirmed this exact build (buildNumberInt 549) is the actor's own 'latest' tag as of pin date",
-    "input": { "username": ["<reel-post-url>"], "includeTranscript": true },
+    "input": {
+      "username": [
+        "<reel-post-url>"
+      ],
+      "includeTranscript": true
+    },
     "_comment": "Reel-specific actor (136K+ users, official apify/ namespace) with an includeTranscript add-on flag, billed per minute of audio -- only ever called with includeTranscript:true against a single post URL at a time, and only for posts already in v_outliers, never a batch scrape. Only applicable to video/reel posts -- an outlier that's a carousel or static image has no audio to transcribe and can't use this actor; that's a real scope gap (v_outliers doesn't currently distinguish post_type), flag before wiring ingest for transcripts. Output field names for the transcript itself (transcript text + timing) were not yet confirmed against a real response as of pinning -- ingest.ts's ingestTranscript() falls back across item.transcript / item.captionText defensively, but this should be confirmed against one real call before trusting it at volume. Every call MUST pass build=0.0.549 explicitly, never 'latest'."
   },
   "tiktokSearch": {
@@ -28,7 +44,13 @@
     "build": "0.0.597",
     "pinnedAt": "2026-08-26",
     "verifiedVia": "GET https://api.apify.com/v2/acts/clockworks~tiktok-scraper -- confirmed this exact build (buildNumberInt 597) is the actor's own 'latest' tag as of pin date; 243K+ total users",
-    "input": { "searchQueries": ["<seed-query>", "..."], "resultsPerPage": 25 },
+    "input": {
+      "searchQueries": [
+        "<seed-query>",
+        "..."
+      ],
+      "resultsPerPage": 25
+    },
     "_comment": "discover.ts --search stage. searchQueries applies to both videos and profiles per the actor's own input schema description -- batch ALL seed queries for a sweep (or a market) into ONE call's searchQueries array, not one call per query: the actor has a $0.50 minimumMaxTotalChargeUsd per RUN (confirmed via pricing API), so many small single-query runs would multiply that minimum unnecessarily. resultsPerPage (DISCOVERY_SEARCH_RESULTS_PER_QUERY in config.ts) is the primary cost lever here. Every call MUST pass build=0.0.597 explicitly, never 'latest'."
   },
   "tiktokPosts": {
@@ -36,7 +58,14 @@
     "build": "0.0.597",
     "pinnedAt": "2026-08-26",
     "verifiedVia": "Same actor/build as tiktokSearch above -- confirmed its `profiles` input mode (pull a profile's own videos) via GET .../builds/default inputSchema on 2026-08-26",
-    "input": { "profiles": ["<handle>", "..."], "resultsPerPage": 10, "excludePinnedPosts": true },
+    "input": {
+      "profiles": [
+        "<handle>",
+        "..."
+      ],
+      "resultsPerPage": 10,
+      "excludePinnedPosts": true
+    },
     "_comment": "discover.ts --gate stage. Same actor as tiktokSearch, different input mode: profiles instead of searchQueries. excludePinnedPosts:true is required -- confirmed on the 2026-08-26 AU run that 63.4% of resultsPerPage:1 results without it were TikTok's pinned post, not the actual most recent one (same failure mode as the Instagram pinned-post bug found earlier in this pipeline). Batch as many candidate handles as possible into one call for the same $0.50-per-run-minimum reason. resultsPerPage here is DISCOVERY_GATE_MAX_POSTS_PER_CANDIDATE in config.ts. This stage also now computes last_post_at (moved here from --profile/tiktokProfile, see that entry's comment) alongside video_posts_90d/median_vpf_90d -- it's the expensive stage: cost is candidates x posts-per-candidate, not just candidates. Every call MUST pass build=0.0.597 explicitly, never 'latest'."
   },
   "tiktokProfile": {
@@ -44,7 +73,16 @@
     "build": "0.0.468",
     "pinnedAt": "2026-08-26",
     "verifiedVia": "GET https://api.apify.com/v2/acts/clockworks~tiktok-profile-scraper -- confirmed this exact build (buildNumberInt 468) is the actor's own 'latest' tag as of pin date; 37K+ total users",
-    "input": { "profiles": ["<handle>", "..."], "profileScrapeSections": ["videos"], "resultsPerPage": 1 },
+    "input": {
+      "profiles": [
+        "<handle>",
+        "..."
+      ],
+      "profileScrapeSections": [
+        "videos"
+      ],
+      "resultsPerPage": 1
+    },
     "_comment": "discover.ts --profile stage -- the CHEAP gate stage (revision 3): populates followers/bio/is_private and immediately fails candidates on followers<1000 or is_private, before any expensive post pull. last_post_at is deliberately NOT gated here (moved to tiktokPosts/--gate, see that entry's comment): confirmed on the 2026-08-26 AU run that resultsPerPage:1 without excludePinnedPosts returns TikTok's pinned post 63.4% of the time, not the actual most recent one, so this single item's createTime cannot be trusted for recency. followers/is_private are author-level metadata and unaffected by pinning, so they stay here. resultsPerPage MUST be 1: this actor's default is 100 posts/profile (it's a profile+videos scraper, not profile-only), so leaving it unset would make this 'cheap' stage cost ~100x more (confirmed via the actor's input schema on 2026-08-26 -- profileScrapeSections defaults to ['videos'], resultsPerPage defaults to 100). Batch candidates into one call, same per-run-minimum reasoning as tiktokSearch. Every call MUST pass build=0.0.468 explicitly, never 'latest'."
   },
   "tiktokTranscript": {
@@ -52,7 +90,28 @@
     "build": "0.0.68",
     "pinnedAt": "2026-08-26",
     "verifiedVia": "GET https://api.apify.com/v2/acts/clockworks~tiktok-transcript-extractor -- confirmed this exact build (buildNumberInt 68) is the actor's own 'latest' tag as of pin date; same clockworks/ publisher already trusted for tiktokSearch/tiktokPosts/tiktokProfile; 343 total users, 5-star rating (6 reviews), 98.8% run success rate over the last 30 days (1784/1806)",
-    "input": { "postURLs": ["<post-url>"], "downloadSubtitlesOptions": "DOWNLOAD_SUBTITLES" },
+    "input": {
+      "postURLs": [
+        "<post-url>"
+      ],
+      "downloadSubtitlesOptions": "DOWNLOAD_SUBTITLES"
+    },
     "_comment": "Pinned 2026-08-26 for Prompt 4 Step 4 -- v_outliers's first real result was a TikTok post, and the only transcript actor previously pinned (apify/instagram-reel-scraper) is Instagram-only. downloadSubtitlesOptions MUST be DOWNLOAD_SUBTITLES, not one of the TRANSCRIBE_* modes: DOWNLOAD_SUBTITLES reuses TikTok's own subtitle track when present (confirmed present on the first real target post via its raw.videoMeta.subtitleLinks field, captured by the harvest actor) for a flat ~$0.003/video 'Video' charge (BRONZE-tier pricing as of 2026-08-26, the real org account's plan tier -- was ~$0.0037 at FREE, which is what was actually pinned against since .env held the personal account's token at pin time); the TRANSCRIBE_* modes invoke real speech-to-text and are billed an EXTRA $0.041/started-minute on top (BRONZE; was $0.048 at FREE) -- for a multi-minute TikTok video that's ~10-15x more expensive for the same result whenever native subtitles already exist. Only reach for a TRANSCRIBE_* mode if DOWNLOAD_SUBTITLES comes back empty for a given post. Every call MUST pass build=0.0.68 explicitly, never 'latest'."
+  },
+  "instagramDiscovery": {
+    "actorId": "apify/instagram-hashtag-scraper",
+    "build": "0.0.654",
+    "pinnedAt": "2026-09-03",
+    "verifiedVia": "GET https://api.apify.com/v2/acts/apify~instagram-hashtag-scraper -- confirmed build 0.0.654 is the actor's own 'latest' tag as of pin date; 82K+ users, official apify/ namespace",
+    "input": {
+      "hashtags": [
+        "<hashtag-or-keyword>",
+        "..."
+      ],
+      "keywordSearch": true,
+      "resultsType": "reels",
+      "resultsLimit": 30
+    },
+    "_comment": "Instagram discovery, added 2026-09-03. Instagram has no keyword search the pipeline can query the way TikTok does, which is why every market sweep before this found only TikTok accounts (980 of 981 discovery candidates). This actor works around that: scrape posts/reels under a hashtag or keyword, then read the ACCOUNT HANDLE off each result -- the accounts are the output, the posts are just the means. resultsType MUST be 'reels' not 'posts': the scoring chain needs a video view count for vpf, and Instagram career content is carousel-heavy (49 of the first 117 collected posts were Sidecar/Image and structurally unscoreable), so discovering carousel accounts would add accounts that can never produce an outlier. keywordSearch:true allows plain phrases as well as #tags. PAY_PER_EVENT at $0.0023/result BRONZE with a $0.0026 minimum -- effectively no per-run minimum, so unlike clockworks/tiktok-scraper there's no need to batch every seed into one call. Every call MUST pass build=0.0.654 explicitly, never 'latest'."
   }
 }

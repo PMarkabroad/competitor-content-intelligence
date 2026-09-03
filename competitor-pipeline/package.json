@@ -25,7 +25,8 @@
     "pregenerate-drafts": "tsx scripts/pregenerate_drafts.ts",
     "generate-from-analysis": "tsx scripts/generate_from_analysis.ts",
     "purge-job-listings": "tsx scripts/purge_job_listings.ts",
-    "purge-nationality": "tsx scripts/purge_nationality_content.ts"
+    "purge-nationality": "tsx scripts/purge_nationality_content.ts",
+    "discover-instagram": "tsx scripts/discover_instagram.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.120.0",
