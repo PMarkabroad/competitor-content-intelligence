@@ -1,0 +1,246 @@
+/**
+ * Generates original Ark posts from the AGGREGATE intelligence, not from a
+ * single competitor video.
+ *
+ * pregenerate_drafts.ts adapts one competitor post at a time -- useful, but
+ * it can only ever produce a variation on something one account already
+ * made. This script feeds the model what the whole corpus says: which hook
+ * patterns actually score, which video shapes score, which subjects are
+ * proven but barely covered, and how the three markets differ. Then it asks
+ * for posts that put a winning pattern onto an uncovered subject -- a
+ * combination no single competitor has made yet.
+ *
+ * Same voice rules as the per-post path, read from the same skill files:
+ * proof bank enforced, no visa or migration claims, no invented vacancies
+ * or salaries, Green-tier story material only.
+ *
+ * Stored in generated_drafts with source_post_id = null, so /drafts and
+ * /content-ideas can tell an analysis-derived post from an adaptation.
+ * source_caption carries the evidence the post was built on, so a human
+ * can see why it was suggested.
+ *
+ * Usage: npm run generate-from-analysis -- [--count=5] [--dry-run]
+ */
+
+import "dotenv/config";
+import { readFileSync } from "node:fs";
+import { getSupabaseClient } from "./lib/supabaseClient.ts";
+
+const SKILL_DIR = new URL("../reference/arkabroad-voice-skill/", import.meta.url);
+
+interface HookRow {
+  post_id: string;
+  hook_pattern: string | null;
+  narrative_structure: string | null;
+  sub_topic: string | null;
+  content_angle: string | null;
+  opening_line: string | null;
+  outlier_score: number | null;
+  brand_fit: string | null;
+  competitor_id: string;
+  competitors: { name: string; market: string; active: boolean } | null;
+}
+
+function arg(name: string): string | null {
+  const f = process.argv.find((a) => a.startsWith(`--${name}=`));
+  return f ? f.slice(name.length + 3) : null;
+}
+
+function avg(ns: number[]): number {
+  return ns.length ? ns.reduce((a, b) => a + b, 0) / ns.length : 0;
+}
+
+function buildVoiceGuide(): string {
+  const strip = (md: string) => md.replace(/^---\n[\s\S]*?\n---\n/, "").trim();
+  const read = (rel: string) => readFileSync(new URL(rel, SKILL_DIR), "utf-8").trim();
+  return [
+    strip(read("SKILL.md")),
+    "\n---\n# Reference: proof bank\n",
+    "These are the ONLY approved numbers. If a figure is not here, it does not go in the post.",
+    read("references/proof-bank.md"),
+    "\n---\n# Reference: voice bank\n",
+    "Cadence samples. Match the rhythm; do not quote these lines as copy.",
+    read("references/voice-bank.md"),
+  ].join("\n");
+}
+
+async function main() {
+  const count = Number(arg("count") ?? 5);
+  const dryRun = process.argv.includes("--dry-run");
+
+  const apiKey = process.env.ANTHROPIC_API_KEY;
+  if (!apiKey) throw new Error("ANTHROPIC_API_KEY must be set.");
+
+  const supabase = getSupabaseClient();
+  const { data, error } = await supabase
+    .from("hook_library")
+    .select(
+      "post_id, hook_pattern, narrative_structure, sub_topic, content_angle, opening_line, outlier_score, brand_fit, competitor_id, competitors(name, market, active)"
+    )
+    .order("outlier_score", { ascending: false });
+  if (error) throw new Error(`Failed to read hook_library: ${error.message}`);
+
+  // Same exclusions the dashboard applies: nothing that trips a
+  // Never-ships rule, nothing from an account we've since dropped.
+  const rows = ((data ?? []) as unknown as HookRow[]).filter(
+    (r) => r.brand_fit !== "no" && r.competitors?.active !== false && r.outlier_score != null
+  );
+  if (rows.length === 0) {
+    console.log("No usable tagged hooks. Run the tagging pass first.");
+    return;
+  }
+
+  // Pattern performance
+  const byPattern = new Map<string, number[]>();
+  for (const r of rows) {
+    if (!r.hook_pattern) continue;
+    if (!byPattern.has(r.hook_pattern)) byPattern.set(r.hook_pattern, []);
+    byPattern.get(r.hook_pattern)!.push(r.outlier_score!);
+  }
+  const patterns = Array.from(byPattern.entries())
+    .map(([p, s]) => ({ pattern: p, n: s.length, score: avg(s) }))
+    .sort((a, b) => b.score - a.score);
+
+  // Subject coverage -- proven but thinly covered is where the opening is.
+  const bySubject = new Map<string, HookRow[]>();
+  for (const r of rows) {
+    const k = r.sub_topic?.trim();
+    if (!k) continue;
+    if (!bySubject.has(k)) bySubject.set(k, []);
+    bySubject.get(k)!.push(r);
+  }
+  const subjects = Array.from(bySubject.entries()).map(([subject, rs]) => ({
+    subject,
+    n: rs.length,
+    accounts: new Set(rs.map((r) => r.competitor_id)).size,
+    score: avg(rs.map((r) => r.outlier_score!)),
+  }));
+  // Visa/sponsorship subjects are stripped from the gap list before the
+  // model ever sees it. They score well and are barely covered, so they
+  // rank high as "opportunities" -- but immigration assistance is a
+  // regulated activity in Australia and Ark is not a migration agent, so
+  // they are not opportunities, they are a compliance problem. The prompt
+  // forbids them too; this stops them being offered in the first place
+  // rather than relying on the model to decline a suggestion we made.
+  const REGULATED = /\bvisa|sponsorship|sponsored|\b482\b|migration|immigration|\bPR\b|permanent residen/i;
+  const excludedGaps = subjects.filter((s) => s.accounts <= 2 && REGULATED.test(s.subject));
+
+  const gaps = subjects
+    .filter((s) => s.accounts <= 2 && !REGULATED.test(s.subject))
+    .sort((a, b) => b.score / (b.accounts || 1) - a.score / (a.accounts || 1))
+    .slice(0, 12);
+
+  if (excludedGaps.length > 0) {
+    console.log(
+      `(excluded ${excludedGaps.length} regulated-topic subject(s) from the gap list: ${excludedGaps
+        .map((g) => g.subject)
+        .join("; ")})\n`
+    );
+  }
+
+  // Market split
+  const byMarket = new Map<string, number[]>();
+  for (const r of rows) {
+    const m = r.competitors?.market;
+    if (!m) continue;
+    if (!byMarket.has(m)) byMarket.set(m, []);
+    byMarket.get(m)!.push(r.outlier_score!);
+  }
+
+  const topStructures = rows
+    .filter((r) => r.narrative_structure && r.narrative_structure !== "null")
+    .slice(0, 12)
+    .map((r) => `${r.outlier_score!.toFixed(1)}x — ${r.narrative_structure}`);
+
+  const evidence = [
+    `CORPUS: ${rows.length} tagged high-performing competitor videos across ${byMarket.size} markets (AU/US/CA).`,
+    "",
+    "HOOK PATTERNS BY AVERAGE OUTLIER SCORE (score = how far above that account's own median the video landed):",
+    ...patterns.map((p) => `  ${p.pattern.replace(/_/g, " ")}: ${p.score.toFixed(1)}x across ${p.n} video(s)`),
+    "",
+    "HIGH-PERFORMING VIDEO STRUCTURES (the running order competitors actually used):",
+    ...topStructures.map((s) => `  ${s}`),
+    "",
+    "PROVEN BUT BARELY COVERED SUBJECTS (strong score, two or fewer accounts covering it — this is where the opening is):",
+    ...gaps.map((g) => `  ${g.subject}: ${g.score.toFixed(1)}x, ${g.accounts} account(s), ${g.n} video(s)`),
+    "",
+    "MARKET COMPARISON:",
+    ...Array.from(byMarket.entries()).map(([m, s]) => `  ${m}: ${avg(s).toFixed(1)}x average across ${s.length} video(s)`),
+  ].join("\n");
+
+  console.log(evidence);
+  console.log(`\nAsking for ${count} post(s) built from this.\n`);
+  if (dryRun) {
+    console.log("Dry run -- nothing generated.");
+    return;
+  }
+
+  const system = `You are the content strategist for Ark Abroad, writing in the founder's voice per the guide below.
+
+${buildVoiceGuide()}
+
+---
+
+You are given AGGREGATE competitive intelligence: what is actually working across dozens of competitor videos in the Australian, US and Canadian career-content markets. You are NOT adapting any single competitor video.
+
+Your job: propose original Ark Abroad posts that put a high-scoring hook pattern and structure onto a subject the data shows is proven but barely covered. The combination should be one no competitor in the data has made yet. Ground every choice in the evidence given -- say which pattern and which gap each post is built on.
+
+HARD RULES, no exceptions:
+- Every number must appear verbatim in the proof bank above. If the proof bank doesn't have it, write the line without a number.
+- Never invent a specific vacancy, employer, salary or city as though it exists. No made-up job postings, even as illustration.
+- Never state or imply anything about visa outcomes, sponsorship eligibility or migration pathways. Immigration assistance is a regulated activity in Australia; Ark is a career accelerator, not a migration agent.
+- Green-tier founder story material only.
+- Follow "Never ships" in full.
+
+Output ONLY valid JSON, no markdown fences, no preamble:
+[{"market":"AU|US|CA","built_on":"one sentence naming the pattern and the gap subject this uses, citing the numbers from the evidence","hook":"the opening line, opening cold","script":"the full reel or carousel script, ready to read","caption":"a short Instagram caption at the Instagram register"}]
+Exactly ${count} objects.`;
+
+  const { default: Anthropic } = await import("@anthropic-ai/sdk");
+  const anthropic = new Anthropic({ apiKey });
+  const message = await anthropic.messages.create({
+    model: "claude-opus-5",
+    max_tokens: 16000,
+    thinking: { type: "adaptive" },
+    system,
+    messages: [{ role: "user", content: evidence }],
+  });
+
+  const block = message.content.find((b) => b.type === "text");
+  if (!block || block.type !== "text") throw new Error("No text block returned.");
+  const jsonText = block.text.trim().replace(/^```(?:json)?\s*/i, "").replace(/```\s*$/i, "").trim();
+
+  let posts: { market: string; built_on: string; hook: string; script: string; caption: string }[];
+  try {
+    posts = JSON.parse(jsonText);
+  } catch {
+    throw new Error(`Could not parse response as JSON: ${jsonText.slice(0, 400)}`);
+  }
+
+  let saved = 0;
+  for (const p of posts) {
+    const { error: insErr } = await supabase.from("generated_drafts").insert({
+      competitor_name: "Cross-competitor analysis",
+      market: ["AU", "US", "CA"].includes(p.market) ? p.market : "AU",
+      source_post_id: null,
+      source_caption: `Built on: ${p.built_on}`,
+      hook: p.hook,
+      script: p.script,
+      caption: p.caption,
+    });
+    if (insErr) {
+      console.error(`  FAILED to save: ${insErr.message}`);
+      continue;
+    }
+    saved++;
+    console.log(`  [${p.market}] ${p.hook.slice(0, 90)}`);
+    console.log(`        built on: ${p.built_on.slice(0, 120)}`);
+  }
+
+  console.log(`\nSaved ${saved} analysis-derived post(s). They're on /drafts.`);
+}
+
+main().catch((err) => {
+  console.error(err);
+  process.exitCode = 1;
+});

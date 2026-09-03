@@ -22,7 +22,8 @@
     "roster-quality": "tsx scripts/roster_quality.ts",
     "backfill-hook-scores": "tsx scripts/backfill_hook_scores.ts",
     "build-voice-guide": "tsx scripts/build_voice_guide.ts",
-    "pregenerate-drafts": "tsx scripts/pregenerate_drafts.ts"
+    "pregenerate-drafts": "tsx scripts/pregenerate_drafts.ts",
+    "generate-from-analysis": "tsx scripts/generate_from_analysis.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.120.0",
