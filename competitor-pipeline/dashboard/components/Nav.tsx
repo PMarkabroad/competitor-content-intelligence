@@ -4,32 +4,35 @@ import { useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
-// Simplified nav: the 5 links a founder actually uses live up top with no
-// section label. Everything else (deeper analysis screens, still fully
-// functional, just not day-to-day) is one click away under "More" instead
-// of being flattened into 15 always-visible links across 4 sections.
-// Nothing was deleted -- every route below still exists and works.
+// Five day-to-day links, ordered the way the work actually runs: see the
+// state of things, see who we track, see what the data says, get ideas,
+// get something ready to post.
+//
+// The previous version put only 5 links up top too, but four of the five
+// questions this tool exists to answer -- which patterns work, which
+// formats, where the gaps are, what to make -- were all buried under
+// "More", along with the competitor roster. Those six analysis screens are
+// now one /insights page, so they're a click from anywhere instead of a
+// click plus a hunt.
+//
+// Nothing was deleted. Every old route still exists and still works; the
+// ones below just aren't the daily path.
 const PRIMARY_LINKS: { href: string; label: string }[] = [
   { href: "/", label: "Dashboard" },
+  { href: "/competitors", label: "Competitors" },
+  { href: "/insights", label: "Insights" },
   { href: "/content-ideas", label: "Content ideas" },
   { href: "/drafts", label: "Ready-made posts" },
-  { href: "/transcripts", label: "Transcripts" },
-  { href: "/status", label: "Status" },
 ];
 
 const MORE_LINKS: { href: string; label: string }[] = [
-  { href: "/review", label: "Review" },
-  { href: "/competitors", label: "Competitors" },
-  { href: "/outliers", label: "Outliers" },
-  { href: "/reports", label: "Reports" },
-  { href: "/hooks", label: "Hooks" },
-  { href: "/hooks/analysis", label: "Hook patterns" },
-  { href: "/formats", label: "Formats" },
-  { href: "/topics", label: "Topics" },
-  { href: "/markets", label: "Markets" },
-  { href: "/gaps", label: "Gaps" },
-  { href: "/recommendations", label: "Recommendations" },
-  { href: "/data", label: "Data" },
+  { href: "/review", label: "Review new accounts" },
+  { href: "/outliers", label: "Transcription queue" },
+  { href: "/transcripts", label: "Transcripts" },
+  { href: "/hooks", label: "Hook library" },
+  { href: "/reports", label: "Monthly reports" },
+  { href: "/status", label: "Status" },
+  { href: "/data", label: "Raw tables" },
 ];
 
 function isActive(pathname: string, href: string) {
