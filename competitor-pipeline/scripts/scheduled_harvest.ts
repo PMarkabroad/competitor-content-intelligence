@@ -13,7 +13,14 @@
  * Never schedules transcription -- that stays a separate, manual/human
  * step per schedule.md.
  *
- * Usage: npm run scheduled-harvest -- --tier T2
+ * Usage: npm run scheduled-harvest -- --tier T2 [--platform instagram|tiktok]
+ *
+ * --platform is optional and narrows the run to one platform. Both
+ * platforms are harvested when it is omitted, which stays the default
+ * cadence behaviour. It exists because the two platforms have very
+ * different per-run economics -- the TikTok actor carries a $0.50/run
+ * minimum -- so newly promoted Instagram accounts can be backfilled
+ * without paying to re-pull TikTok in the same breath.
  */
 
 import "dotenv/config";
@@ -35,7 +42,13 @@ async function main() {
   const tierArgIndex = process.argv.indexOf("--tier");
   const tier = (tierArgIndex >= 0 ? process.argv[tierArgIndex + 1] : null) as Tier | null;
   if (!tier || !["T2", "T3"].includes(tier)) {
-    throw new Error("Usage: scheduled_harvest.ts --tier <T2|T3> (T1 is exempt from this scheduler -- see harvest_t1.ts)");
+    throw new Error("Usage: scheduled_harvest.ts --tier <T2|T3> [--platform instagram|tiktok] (T1 is exempt from this scheduler -- see harvest_t1.ts)");
+  }
+
+  const platformArgIndex = process.argv.indexOf("--platform");
+  const platform = platformArgIndex >= 0 ? process.argv[platformArgIndex + 1] : null;
+  if (platform && !["instagram", "tiktok"].includes(platform)) {
+    throw new Error(`--platform must be instagram or tiktok, got "${platform}".`);
   }
 
   const apifyToken = process.env.APIFY_TOKEN;
@@ -55,33 +68,36 @@ async function main() {
   // sat with last_scraped_at=null after a full T2 harvest run because of
   // this. Removed -- if a row is active, it's meant to be harvested,
   // regardless of market.
-  const { data, error } = await supabase
+  let query = supabase
     .from("competitors")
     .select("competitor_id, name, platform, market, handle, posts_per_run, last_scraped_at, tier")
     .eq("tier", tier)
     .eq("active", true)
     .eq("handle_verified", true);
+  if (platform) query = query.eq("platform", platform);
+  const { data, error } = await query;
 
   if (error) throw new Error(`Failed to read competitors: ${error.message}`);
   const competitors = (data ?? []) as Competitor[];
   if (competitors.length === 0) {
-    console.log(`No active, verified ${tier} competitors. Nothing to harvest.`);
+    console.log(`No active, verified ${tier}${platform ? ` ${platform}` : ""} competitors. Nothing to harvest.`);
     return;
   }
 
   const cap = config.MONTHLY_APIFY_SPEND_CAP_USD;
   const spentSoFar = await getRealMonthToDateSpendUsd(apifyToken);
   const estimate = estimateRunCostUsd(competitors);
-  console.log(`[${tier}] ${competitors.length} competitor(s). Real spend so far this cycle: $${spentSoFar.toFixed(4)}. Estimated cost of this run: $${estimate.toFixed(4)}. Cap: $${cap}.`);
+  const label = platform ? `${tier}/${platform}` : tier;
+  console.log(`[${label}] ${competitors.length} competitor(s). Real spend so far this cycle: $${spentSoFar.toFixed(4)}. Estimated cost of this run: $${estimate.toFixed(4)}. Cap: $${cap}.`);
 
   if (spentSoFar + estimate > cap) {
-    const message = `SKIPPED ${tier} harvest: real spend $${spentSoFar.toFixed(4)} + estimated $${estimate.toFixed(4)} would exceed the $${cap} monthly cap.`;
+    const message = `SKIPPED ${label} harvest: real spend $${spentSoFar.toFixed(4)} + estimated $${estimate.toFixed(4)} would exceed the $${cap} monthly cap.`;
     console.error(`\n*** ${message} ***\n`);
-    logFlag("scheduled-harvest", message, { tier, spentSoFar, estimate, cap, competitorCount: competitors.length });
+    logFlag("scheduled-harvest", message, { tier, platform, spentSoFar, estimate, cap, competitorCount: competitors.length });
     return; // skip, not fail -- exit 0
   }
 
-  const totalPosts = await harvestCompetitors(supabase, actors, apifyToken, competitors, `Scheduled ${tier}`, "scheduled-harvest");
+  const totalPosts = await harvestCompetitors(supabase, actors, apifyToken, competitors, `Scheduled ${label}`, "scheduled-harvest");
 
   const spentAfter = await getRealMonthToDateSpendUsd(apifyToken);
   console.log(`\n[${tier}] Harvest complete. ${totalPosts} total post row(s) across ${competitors.length} competitor(s). Real spend now: $${spentAfter.toFixed(4)} / $${cap}.`);
