@@ -100,11 +100,22 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "No text returned from the model." }, { status: 502 });
     }
 
+    // The system prompt says "no markdown code fences" and the model wraps
+    // the response in ```json anyway often enough to fail real runs -- two
+    // of 30 in the first pre-generation batch. discover.ts's classify stage
+    // hit the identical failure and strips defensively rather than trusting
+    // the instruction; same fix here.
+    const jsonText = textBlock.text
+      .trim()
+      .replace(/^```(?:json)?\s*/i, "")
+      .replace(/```\s*$/i, "")
+      .trim();
+
     let parsed: { hook: string; script: string; caption: string };
     try {
-      parsed = JSON.parse(textBlock.text);
+      parsed = JSON.parse(jsonText);
     } catch {
-      return NextResponse.json({ error: "Model did not return valid JSON.", raw: textBlock.text.slice(0, 500) }, { status: 502 });
+      return NextResponse.json({ error: "Model did not return valid JSON.", raw: jsonText.slice(0, 500) }, { status: 502 });
     }
 
     // Persist so the draft survives a page refresh / is visible on the Ready-made posts page.
