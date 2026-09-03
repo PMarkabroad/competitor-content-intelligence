@@ -274,9 +274,26 @@ async function main() {
     };
   });
 
+  // Job-listing posts never enter the hook library. An account reading out
+  // a live vacancy -- pay, duties, who qualifies, where to apply -- scores
+  // well because listings get saved and shared, so relative-to-own-baseline
+  // scoring surfaces them constantly. They carry no hook craft to learn
+  // from and Ark doesn't post job boards, so tagging them just crowds
+  // Content ideas and Insights with material nobody will use.
+  // Matched on the source caption and transcript, before spending a model
+  // call on them.
+  const JOB_LISTING =
+    /remote (job|role|work)|work from home|job (lead|listing|drop|alert|posting)|hiring (right )?now|now hiring|\bwfh\b|apply (now|here)|vacanc|\$\d+(\.\d+)?\s*(an?\s*)?(hour|hr)\b/i;
+  const beforeFilter = candidates.length;
+  candidates = candidates.filter((c) => !JOB_LISTING.test(`${c.caption ?? ""} ${c.transcript.slice(0, 1200)}`));
+  const skippedListings = beforeFilter - candidates.length;
+
   candidates.sort((a, b) => (b.outlier_score ?? 0) - (a.outlier_score ?? 0));
   if (limit) candidates = candidates.slice(0, limit);
 
+  if (skippedListings > 0) {
+    console.log(`Skipped ${skippedListings} job-listing post(s) -- vacancy read-outs carry no hook craft and Ark doesn't post job boards.`);
+  }
   console.log(`Drafting hook tags for ${candidates.length} transcribed post(s) in batches of ${BATCH_SIZE}.`);
   console.log(`Anthropic API only -- no Apify spend. why_it_performed is left NULL for a human.${dryRun ? " (DRY RUN, nothing will be written)" : ""}\n`);
 
