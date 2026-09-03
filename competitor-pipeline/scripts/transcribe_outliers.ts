@@ -4,16 +4,22 @@
  * -- reuses TikTok's own native captions, no real speech-to-text, see
  * apify/actors.json's tiktokTranscript entry).
  *
- * TikTok only, for now. Confirmed via the actor's own pricing info (GET
+ * Handles BOTH platforms, but Instagram only behind --instagram.
+ * Confirmed via the actor's own pricing info (GET
  * .../acts/clockworks~tiktok-transcript-extractor) that DOWNLOAD_SUBTITLES
  * mode charges a flat "Video" event (~$0.003/video, BRONZE) with no
  * per-run minimum (minimalMaxTotalChargeUsd: null) -- so unlike the
  * tiktok-scraper actor, there's no cost benefit to batching multiple
- * postURLs into one call. Instagram outliers use a different, ~10-15x
- * more expensive actor (apify/instagram-reel-scraper,
- * ESTIMATED_COST_PER_TRANSCRIPT_USD in config.ts) and are deliberately
- * skipped here rather than silently spending that much per item under a
- * TikTok-sized budget estimate -- flag before wiring that path.
+ * postURLs into one call.
+ *
+ * Instagram uses apify/instagram-reel-scraper with includeTranscript,
+ * billed per started minute of audio (~$0.044/reel via
+ * ESTIMATED_COST_PER_TRANSCRIPT_USD) -- roughly fifteen times TikTok's
+ * per item, with no cheap subtitle path to fall back on. That's why it's
+ * opt-in per run rather than included by default: it shouldn't be spent
+ * as a side effect of the routine TikTok pass. The two also differ in
+ * response shape -- TikTok returns a LINK to a .vtt, Instagram returns
+ * the transcript inline on the item.
  *
  * Called ONE POST PER ACTOR RUN, not batched, because a real prior
  * transcript row's raw JSON showed this actor's DOWNLOAD_SUBTITLES output
@@ -29,11 +35,11 @@
  *
  * MODES (--mode=, actor's downloadSubtitlesOptions enum):
  *   DOWNLOAD_SUBTITLES (default) -- reuse TikTok's own caption track only.
- *     Flat ~$0.003/video, no speech-to-text. Cheap, but PROVEN USELESS on
- *     this roster: a full run over 68 outliers on 2026-08-31 returned
- *     0 usable transcripts -- none of these accounts publish native
- *     captions. Kept as the default anyway since it's the only mode that
- *     can't run up a real bill by accident.
+ *     Flat ~$0.003/video, no speech-to-text, and the right default: it
+ *     transcribes the large majority of this roster. (An earlier note here
+ *     called it "proven useless" after a run returned 0 transcripts. That
+ *     was the field-name bug described above, not a property of the mode --
+ *     the captions were always there.)
  *   DOWNLOAD_AND_TRANSCRIBE_VIDEOS_WITHOUT_SUBTITLES -- reuse captions
  *     where they exist, real speech-to-text where they don't. Strictly
  *     dominant over TRANSCRIBE_ALL_VIDEOS (never more expensive, cheaper
@@ -47,7 +53,7 @@
  * billed as 2 minutes. The cost estimate below is therefore computed from
  * each post's real `duration_seconds`, not a flat per-video guess.
  *
- * Usage: npm run transcribe-outliers -- [--limit=N] [--mode=<enum>]
+ * Usage: npm run transcribe-outliers -- [--limit=N] [--mode=<enum>] [--instagram]
  */
 
 import "dotenv/config";
@@ -147,6 +153,9 @@ async function main() {
   const limitArg = process.argv.find((a) => a.startsWith("--limit="));
   const limit = limitArg ? Number(limitArg.slice("--limit=".length)) : null;
 
+  // Instagram is opt-in because its actor costs ~15x TikTok's per item.
+  const includeInstagram = process.argv.includes("--instagram");
+
   const modeArg = process.argv.find((a) => a.startsWith("--mode="));
   const mode = (modeArg ? modeArg.slice("--mode=".length) : "DOWNLOAD_SUBTITLES") as SubtitleMode;
   if (!SUBTITLE_MODES.includes(mode)) {
@@ -192,15 +201,38 @@ async function main() {
   const durationByPostId = new Map((posts ?? []).map((p) => [p.post_id, p.duration_seconds as number | null]));
 
   const tiktokRows = rows.filter((r) => platformById.get(r.competitor_id) === "tiktok");
-  const nonTiktokRows = rows.filter((r) => platformById.get(r.competitor_id) !== "tiktok");
+  const instagramRows = rows.filter((r) => platformById.get(r.competitor_id) === "instagram");
+  const otherRows = rows.filter((r) => {
+    const p = platformById.get(r.competitor_id);
+    return p !== "tiktok" && p !== "instagram";
+  });
 
-  if (nonTiktokRows.length > 0) {
-    console.log(`Skipping ${nonTiktokRows.length} non-TikTok outlier(s) -- this script only handles the cheap TikTok DOWNLOAD_SUBTITLES path. Instagram transcription needs its own confirm-before-spend run.`);
+  for (const r of otherRows) {
+    logFlag("transcribe-outliers", "Outlier on an unsupported platform, skipped", {
+      postId: r.post_id,
+      platform: platformById.get(r.competitor_id) ?? "unknown",
+    });
   }
 
-  const targets = tiktokRows
-    .map((r) => ({ postId: r.post_id, postUrl: urlByPostId.get(r.post_id) }))
-    .filter((t): t is { postId: string; postUrl: string } => {
+  // Instagram is opt-in per run. Its transcript actor bills roughly
+  // ESTIMATED_COST_PER_TRANSCRIPT_USD (~$0.044/reel, per started minute of
+  // audio) against TikTok's ~$0.003 flat -- about fifteen times more. That
+  // shouldn't be spent silently as a side effect of running the normal
+  // TikTok pass, so it needs --instagram.
+  if (instagramRows.length > 0 && !includeInstagram) {
+    console.log(
+      `${instagramRows.length} Instagram outlier(s) available but skipped. Instagram transcription costs ~$${config.ESTIMATED_COST_PER_TRANSCRIPT_USD}/reel against ~$${TIKTOK_TRANSCRIPT_COST_PER_VIDEO_USD}/video for TikTok -- pass --instagram to include them.`
+    );
+  }
+
+  const selected = includeInstagram ? [...tiktokRows, ...instagramRows] : tiktokRows;
+  const targets = selected
+    .map((r) => ({
+      postId: r.post_id,
+      postUrl: urlByPostId.get(r.post_id),
+      platform: platformById.get(r.competitor_id) === "instagram" ? ("instagram" as const) : ("tiktok" as const),
+    }))
+    .filter((t): t is { postId: string; postUrl: string; platform: "tiktok" | "instagram" } => {
       if (!t.postUrl) {
         logFlag("transcribe-outliers", "Outlier post has no post_url, skipped", { postId: t.postId });
         return false;
@@ -209,9 +241,12 @@ async function main() {
     });
 
   if (targets.length === 0) {
-    console.log("No TikTok outliers with a post_url to transcribe.");
+    console.log("No outliers with a post_url to transcribe.");
     return;
   }
+
+  const igTargets = targets.filter((t) => t.platform === "instagram");
+  const ttTargets = targets.filter((t) => t.platform === "tiktok");
 
   const cap = config.MONTHLY_APIFY_SPEND_CAP_USD;
   const spentSoFar = await getRealMonthToDateSpendUsd(apifyToken);
@@ -220,18 +255,29 @@ async function main() {
   // hence ceil() per video, not a total-seconds/60 average. A post with no
   // recorded duration is assumed to be 2 minutes rather than 1, so the
   // estimate errs high and the cap guard below stays conservative.
-  const flatCost = targets.length * TIKTOK_TRANSCRIPT_COST_PER_VIDEO_USD;
+  const flatCost = ttTargets.length * TIKTOK_TRANSCRIPT_COST_PER_VIDEO_USD;
   let billableStartedMinutes = 0;
-  for (const t of targets) {
+  for (const t of ttTargets) {
     const seconds = durationByPostId.get(t.postId);
     billableStartedMinutes += seconds == null ? 2 : Math.max(1, Math.ceil(seconds / 60));
   }
   const sttCost = usesSpeechToText ? billableStartedMinutes * TIKTOK_STT_COST_PER_STARTED_MINUTE_USD : 0;
-  const estimate = flatCost + sttCost;
+  // Instagram's actor bills per started minute of audio with no cheap
+  // subtitle path, so it's costed at the config's per-transcript figure
+  // rather than TikTok's flat per-video rate.
+  const igCost = igTargets.length * config.ESTIMATED_COST_PER_TRANSCRIPT_USD;
+  const estimate = flatCost + sttCost + igCost;
 
-  console.log(`${targets.length} TikTok outlier(s) to transcribe. Mode: ${mode}.`);
+  console.log(
+    `${targets.length} outlier(s) to transcribe: ${ttTargets.length} TikTok (mode ${mode})` +
+      (igTargets.length ? `, ${igTargets.length} Instagram` : "") +
+      "."
+  );
   if (usesSpeechToText) {
     console.log(`  Speech-to-text billing: ${billableStartedMinutes} started-minute(s) x $${TIKTOK_STT_COST_PER_STARTED_MINUTE_USD} = $${sttCost.toFixed(4)}, plus $${flatCost.toFixed(4)} flat per-video.`);
+  }
+  if (igTargets.length > 0) {
+    console.log(`  Instagram: ${igTargets.length} reel(s) x ~$${config.ESTIMATED_COST_PER_TRANSCRIPT_USD} = $${igCost.toFixed(4)}.`);
   }
   console.log(`Real spend so far: $${spentSoFar.toFixed(4)}. Estimated cost: $${estimate.toFixed(4)}. Cap: $${cap}.`);
 
@@ -248,32 +294,61 @@ async function main() {
 
   for (const [i, target] of targets.entries()) {
     try {
+      // Different platform, different actor and a different response shape.
+      // TikTok returns a link to a .vtt that has to be fetched separately;
+      // Instagram's reel scraper returns the transcript inline on the item
+      // (confirmed against the one Instagram transcript already stored,
+      // whose raw carries a `transcript` field directly).
       const items = await runApifyActor(
-        pin,
-        { postURLs: [target.postUrl], downloadSubtitlesOptions: mode },
+        target.platform === "instagram" ? actors.transcript : pin,
+        target.platform === "instagram"
+          ? { username: [target.postUrl], includeTranscript: true }
+          : { postURLs: [target.postUrl], downloadSubtitlesOptions: mode },
         apifyToken
       );
       const item = items[0];
-      const result = item ? await fetchTranscriptText(item, apifyToken) : null;
-      if (!result) {
+
+      let text: string | null = null;
+      let provenance: Record<string, unknown> = {};
+
+      if (target.platform === "instagram") {
+        // Inline on the item. The field name wasn't confirmed against a
+        // real response when this actor was pinned, so both documented
+        // spellings are read before giving up.
+        const inline = (item?.transcript ?? item?.captionText) as string | undefined;
+        text = inline?.trim() ? inline.trim() : null;
+        provenance = { source: `${actors.transcript.actorId}:${actors.transcript.build}`, platform: "instagram" };
+      } else {
+        const result = item ? await fetchTranscriptText(item, apifyToken) : null;
+        text = result?.text ?? null;
+        provenance = { source: `${pin.actorId}:${pin.build}`, vttUrl: result?.vttUrl, mode };
+      }
+
+      if (!text) {
         noCaptions++;
-        const why = usesSpeechToText
-          ? "EMPTY RESULT despite speech-to-text mode"
-          : "no subtitle track on this video";
-        console.log(`  [${i + 1}/${targets.length}] ${target.postId}: ${why}`);
-        if (usesSpeechToText) {
-          logFlag("transcribe-outliers", "Speech-to-text mode returned no transcript for a post", { postId: target.postId, postUrl: target.postUrl, mode });
+        const why =
+          target.platform === "instagram"
+            ? "no transcript returned for this reel"
+            : usesSpeechToText
+              ? "EMPTY RESULT despite speech-to-text mode"
+              : "no subtitle track on this video";
+        console.log(`  [${i + 1}/${targets.length}] ${target.platform} ${target.postId}: ${why}`);
+        if (usesSpeechToText || target.platform === "instagram") {
+          logFlag("transcribe-outliers", "Paid transcription returned nothing for a post", {
+            postId: target.postId,
+            postUrl: target.postUrl,
+            platform: target.platform,
+            mode,
+          });
         }
         continue;
       }
+
       // Shaped to match what ingestTranscript reads (`transcript`) and the
       // provenance shape already stored on the pre-existing rows.
-      await ingestTranscript(supabase, target.postId, {
-        transcript: result.text,
-        raw: { source: `${pin.actorId}:${pin.build}`, vttUrl: result.vttUrl, mode },
-      });
+      await ingestTranscript(supabase, target.postId, { transcript: text, raw: provenance });
       transcribed++;
-      console.log(`  [${i + 1}/${targets.length}] ${target.postId}: transcribed (${result.text.length} chars)`);
+      console.log(`  [${i + 1}/${targets.length}] ${target.platform} ${target.postId}: transcribed (${text.length} chars)`);
     } catch (err) {
       failed++;
       const message = err instanceof Error ? err.message : String(err);
