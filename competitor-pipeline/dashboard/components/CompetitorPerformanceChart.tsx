@@ -7,15 +7,16 @@ import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContaine
 // ground defined in globals.css -- the previous set was white-alpha grid
 // lines and a near-black tooltip, which were invisible or inverted once the
 // theme went light. Keep them in step if the palette changes again.
-const INK = "#17171a";
-const MUTED = "#86868f";
-const HAIRLINE = "#e4e4de";
+const INK = "#14151a";
+const MUTED = "#858a9c";
+const HAIRLINE = "#e4e7ee";
 
 // One hue per market, all dark enough to read as bars on a light ground and
 // distinguishable without relying on hue alone being obvious.
 const MARKET_COLOR: Record<string, string> = {
-  AU: "#0f6b62", // petrol, the brand colour
-  US: "#7a4fbf", // violet
+  AU: "#4b3be4", // indigo, the brand colour
+  US: "#0d8a7d", // teal -- deliberately far from the indigo above; a
+            // violet sat next to it and the two bars were hard to tell apart
   CA: "#b3671a", // amber-brown
 };
 
@@ -47,13 +48,13 @@ export function CompetitorPerformanceChart({ data }: { data: ChartRow[] }) {
           label={{ value: "median VPF", angle: -90, position: "insideLeft", fill: MUTED, fontSize: 11 }}
         />
         <Tooltip
-          cursor={{ fill: "rgba(23,23,26,0.04)" }}
+          cursor={{ fill: "rgba(20,21,26,0.04)" }}
           contentStyle={{
             background: "#ffffff",
             border: `1px solid ${HAIRLINE}`,
             borderRadius: 8,
             fontSize: 12,
-            boxShadow: "0 4px 12px -4px rgba(23,23,26,0.12)",
+            boxShadow: "0 4px 12px -4px rgba(20,21,26,0.12)",
           }}
           labelStyle={{ color: INK }}
           formatter={(value: number, _name, item) => [value.toFixed(3), `median VPF (${item.payload.market})`]}

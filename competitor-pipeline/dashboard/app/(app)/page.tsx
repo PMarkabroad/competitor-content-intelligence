@@ -44,6 +44,9 @@ async function countRows(
   return count ?? 0;
 }
 
+// One stage of a pipeline. Rendered as a cell in a bordered strip rather
+// than a floating number: seven bare figures side by side read as
+// unrelated stats, which is the opposite of the point.
 function Stage({
   value,
   label,
@@ -58,19 +61,19 @@ function Stage({
   const body = (
     <>
       <span
-        className={`block font-semibold tabular-nums leading-none tracking-tight ${
-          emphasis ? "text-[26px] text-brand" : "text-[26px] text-text"
+        className={`block text-[24px] font-semibold leading-none tracking-tight tabular-nums ${
+          emphasis ? "text-brand" : "text-text"
         }`}
       >
         {formatNumber(value)}
       </span>
-      <span className="mt-1.5 block text-[11px] leading-tight text-faint">{label}</span>
+      <span className="mt-2 block text-[11px] leading-tight text-faint">{label}</span>
     </>
   );
   return (
-    <div className="min-w-0 shrink-0">
+    <div className="flex-1 px-4 py-4 first:pl-5 last:pr-5">
       {href ? (
-        <Link href={href} className="block transition-opacity hover:opacity-70">
+        <Link href={href} className="block rounded transition-colors hover:text-brand">
           {body}
         </Link>
       ) : (
@@ -80,8 +83,18 @@ function Stage({
   );
 }
 
-function Arrow() {
-  return <span className="shrink-0 select-none pb-4 text-border" aria-hidden>&rarr;</span>;
+// The two pipelines are shown separately because they ARE separate, and
+// running them together was actively misleading: 981 -> 60 -> 39 is how
+// many ACCOUNTS survive screening, then 1,250 -> 66 -> 66 -> 50 is what
+// their CONTENT turns into. Chained on one line, the jump from 39 to 1,250
+// reads as a mistake or as noise.
+function Pipeline({ title, children }: { title: string; children: React.ReactNode }) {
+  return (
+    <div>
+      <h2 className="mb-2 text-[11px] font-medium text-faint">{title}</h2>
+      <div className="panel flex divide-x divide-border">{children}</div>
+    </div>
+  );
 }
 
 export default async function HomePage() {
@@ -156,75 +169,71 @@ export default async function HomePage() {
 
   return (
     <div className="p-5">
-      {/* ---- the funnel: raw scraping narrowed into something postable ---- */}
-      <section className="mb-10">
-        <div className="flex flex-wrap items-start gap-x-5 gap-y-4">
+      {/* ---- the two pipelines ---- */}
+      <section className="mb-10 grid grid-cols-1 gap-5 xl:grid-cols-[3fr_4fr]">
+        <Pipeline title="Accounts">
           <Stage value={screened} label="screened" />
-          <Arrow />
           <Stage value={tracked} label="tracked" />
-          <Arrow />
           <Stage value={activeCount} label="active now" href="/competitors" />
-          <Arrow />
+        </Pipeline>
+
+        <Pipeline title="What their content becomes">
           <Stage value={posts} label="posts collected" />
-          <Arrow />
           <Stage value={transcripts} label="transcribed" href="/transcripts" />
-          <Arrow />
           <Stage value={hookCount} label="hooks tagged" href="/hooks" />
-          <Arrow />
           <Stage value={drafts} label="ready to post" href="/drafts" emphasis />
-        </div>
-        <p className="mt-4 text-xs text-dim">
-          {Object.entries(byMarket)
-            .sort((a, b) => b[1] - a[1])
-            .map(([m, n]) => `${m} ${n}`)
-            .join(" · ")}
-          {"  —  "}
-          {Object.entries(byPlatform)
-            .sort((a, b) => b[1] - a[1])
-            .map(([p, n]) => `${n} ${p}`)
-            .join(", ")}
-          {pending > 0 && `  —  ${pending} outlier${pending === 1 ? "" : "s"} waiting to be transcribed`}
-        </p>
+        </Pipeline>
       </section>
+
+      <p className="mb-10 -mt-6 text-xs text-dim">
+        {Object.entries(byMarket)
+          .sort((a, b) => b[1] - a[1])
+          .map(([m, n]) => `${m} ${n}`)
+          .join(" · ")}
+        {" · "}
+        {Object.entries(byPlatform)
+          .sort((a, b) => b[1] - a[1])
+          .map(([p, n]) => `${n} ${p}`)
+          .join(", ")}
+        {pending > 0 && ` · ${pending} outlier${pending === 1 ? "" : "s"} waiting to be transcribed`}
+      </p>
 
       {/* ---- what's working ---- */}
       <section className="mb-10 grid grid-cols-1 gap-8 lg:grid-cols-2">
         <div>
-          <h2 className="mb-3 text-[13px] font-semibold text-text">
-            Hook patterns that are working
-          </h2>
-          <div className="flex flex-col gap-2">
+          <h2 className="mb-2 text-[13px] font-semibold text-text">Hook patterns that are working</h2>
+          <div className="panel divide-y divide-border">
             {topPatterns.map((p) => (
-              <div key={p.name} className="flex items-baseline justify-between gap-3 border-b border-border pb-2 last:border-b-0">
-                <span className="text-xs text-text">{p.name}</span>
+              <div key={p.name} className="flex items-baseline justify-between gap-3 px-4 py-2.5">
+                <span className="text-[13px] text-text">{p.name}</span>
                 <span className="shrink-0 text-xs text-faint">
-                  {p.n} video{p.n === 1 ? "" : "s"}{" "}
-                  <span className="ml-2 font-semibold text-brand">{formatScore(p.score)}</span>
+                  {p.n} video{p.n === 1 ? "" : "s"}
+                  <span className="ml-3 text-[15px] font-semibold text-brand">{formatScore(p.score)}</span>
                 </span>
               </div>
             ))}
-            {topPatterns.length === 0 && <p className="text-xs text-dim">Nothing tagged yet.</p>}
+            {topPatterns.length === 0 && <p className="px-4 py-3 text-xs text-dim">Nothing tagged yet.</p>}
           </div>
-          <Link href="/insights" className="mt-3 inline-block text-[11px] text-brand hover:underline">
+          <Link href="/insights" className="mt-2 inline-block text-[11px] text-brand hover:underline">
             All patterns and gaps
           </Link>
         </div>
 
         <div>
-          <h2 className="mb-3 text-[13px] font-semibold text-text">Shapes that are working</h2>
-          <div className="flex flex-col gap-2">
+          <h2 className="mb-2 text-[13px] font-semibold text-text">Shapes that are working</h2>
+          <div className="panel divide-y divide-border">
             {topShapes.map((s) => (
-              <div key={s.name} className="flex items-baseline justify-between gap-3 border-b border-border pb-2 last:border-b-0">
-                <span className="text-xs text-text">{s.name}</span>
+              <div key={s.name} className="flex items-baseline justify-between gap-3 px-4 py-2.5">
+                <span className="text-[13px] text-text">{s.name}</span>
                 <span className="shrink-0 text-xs text-faint">
-                  {s.n} video{s.n === 1 ? "" : "s"}{" "}
-                  <span className="ml-2 font-semibold text-brand">{formatScore(s.score)}</span>
+                  {s.n} video{s.n === 1 ? "" : "s"}
+                  <span className="ml-3 text-[15px] font-semibold text-brand">{formatScore(s.score)}</span>
                 </span>
               </div>
             ))}
-            {topShapes.length === 0 && <p className="text-xs text-dim">Nothing tagged yet.</p>}
+            {topShapes.length === 0 && <p className="px-4 py-3 text-xs text-dim">Nothing tagged yet.</p>}
           </div>
-          <Link href="/formats" className="mt-3 inline-block text-[11px] text-brand hover:underline">
+          <Link href="/formats" className="mt-2 inline-block text-[11px] text-brand hover:underline">
             How each shape runs
           </Link>
         </div>

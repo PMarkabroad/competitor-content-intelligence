@@ -1,27 +1,29 @@
 @import "tailwindcss";
 
-/* Light, warm-neutral ground with a deep petrol brand.
+/* Light, cool-neutral ground with an indigo brand.
    Why light: this tool is almost entirely text -- hook lines, transcripts,
    scripts, brand-fit notes, dense tables. Long text at 11-13px on a
    near-black ground is measurably harder to scan, and scanning is the
    whole job here.
-   Why warm-neutral rather than cream: cream + serif + terracotta is the
-   default "considered" palette and reads as templated. This is a couple of
-   degrees warm, no more, so white panels still separate from it.
-   Why petrol rather than blue: the accent carries the outlier scores,
-   which are the point of the product. Petrol reads as instrument-panel
-   precise, and isn't the default SaaS blue. */
+   The ground is very slightly cool so white panels lift off it cleanly.
+   A first pass used a warm ground with a petrol accent; it read washed
+   out, the accent had no presence against the warmth, and the pairing
+   drifted toward the cream-and-clay palette that every generated
+   dashboard lands on.
+   Indigo carries the outlier scores, which are the point of the product.
+   It has enough saturation to read as deliberate on white without being
+   the default SaaS blue. */
 @theme {
-  --color-bg: #f6f6f3;
+  --color-bg: #f7f8fa;
   --color-surface: #ffffff;
-  --color-surface-hover: #f0f0ec;
-  --color-border: #e4e4de;
-  --color-border-strong: #cbcbc3;
-  --color-brand: #0f6b62;
-  --color-brand-soft: #0f6b6214;
-  --color-text: #17171a;
-  --color-dim: #55555d;
-  --color-faint: #86868f;
+  --color-surface-hover: #f2f4f8;
+  --color-border: #e4e7ee;
+  --color-border-strong: #c8ccd8;
+  --color-brand: #4b3be4;
+  --color-brand-soft: #4b3be414;
+  --color-text: #14151a;
+  --color-dim: #52566a;
+  --color-faint: #858a9c;
   --color-good: #15734a;
   --color-good-soft: #15734a14;
   --color-warn: #96620a;
