@@ -288,11 +288,31 @@ async function main() {
   candidates = candidates.filter((c) => !JOB_LISTING.test(`${c.caption ?? ""} ${c.transcript.slice(0, 1200)}`));
   const skippedListings = beforeFilter - candidates.length;
 
+  // Nationality-ranking and visa/sponsorship content never enters the hook
+  // library either. It breaks two standing rules at once: Never-ships item
+  // 2 (no generalisations about ethnic, national or religious communities
+  // -- sorting an audience by passport is exactly that) and the proof
+  // bank's rule against stating anything about visa outcomes, immigration
+  // assistance being a regulated activity in Australia.
+  //
+  // Deliberately narrow: it targets content that RANKS PEOPLE BY COUNTRY or
+  // trades in sponsorship statistics, not any mention of a country. "No
+  // local experience in Australia" is core audience material and must keep
+  // getting tagged.
+  const NATIONALITY_VISA =
+    /by nationality|nationalit(y|ies)|top \d+ countr|countr(y|ies) (list|ranking|breakdown)|overseas.born|sponsorship (grant|by|numbers)|\b482\b|sponsored by their employer|\bPR pathway/i;
+  const beforeNat = candidates.length;
+  candidates = candidates.filter((c) => !NATIONALITY_VISA.test(`${c.caption ?? ""} ${c.transcript.slice(0, 1200)}`));
+  const skippedNationality = beforeNat - candidates.length;
+
   candidates.sort((a, b) => (b.outlier_score ?? 0) - (a.outlier_score ?? 0));
   if (limit) candidates = candidates.slice(0, limit);
 
   if (skippedListings > 0) {
     console.log(`Skipped ${skippedListings} job-listing post(s) -- vacancy read-outs carry no hook craft and Ark doesn't post job boards.`);
+  }
+  if (skippedNationality > 0) {
+    console.log(`Skipped ${skippedNationality} nationality-ranking / visa post(s) -- Never-ships item 2 and the regulated-activity rule.`);
   }
   console.log(`Drafting hook tags for ${candidates.length} transcribed post(s) in batches of ${BATCH_SIZE}.`);
   console.log(`Anthropic API only -- no Apify spend. why_it_performed is left NULL for a human.${dryRun ? " (DRY RUN, nothing will be written)" : ""}\n`);

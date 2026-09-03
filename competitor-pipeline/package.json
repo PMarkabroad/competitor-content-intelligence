@@ -24,7 +24,8 @@
     "build-voice-guide": "tsx scripts/build_voice_guide.ts",
     "pregenerate-drafts": "tsx scripts/pregenerate_drafts.ts",
     "generate-from-analysis": "tsx scripts/generate_from_analysis.ts",
-    "purge-job-listings": "tsx scripts/purge_job_listings.ts"
+    "purge-job-listings": "tsx scripts/purge_job_listings.ts",
+    "purge-nationality": "tsx scripts/purge_nationality_content.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.120.0",
