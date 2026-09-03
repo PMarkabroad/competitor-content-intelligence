@@ -23,6 +23,7 @@ const PRIMARY_LINKS: { href: string; label: string }[] = [
   { href: "/insights", label: "Insights" },
   { href: "/content-ideas", label: "Content ideas" },
   { href: "/hooks", label: "Hook library" },
+  { href: "/formats", label: "Formats they use" },
   { href: "/drafts", label: "Ready-made posts" },
 ];
 
