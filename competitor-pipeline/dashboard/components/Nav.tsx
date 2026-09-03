@@ -22,6 +22,7 @@ const PRIMARY_LINKS: { href: string; label: string }[] = [
   { href: "/competitors", label: "Competitors" },
   { href: "/insights", label: "Insights" },
   { href: "/content-ideas", label: "Content ideas" },
+  { href: "/hooks", label: "Hook library" },
   { href: "/drafts", label: "Ready-made posts" },
 ];
 
@@ -29,7 +30,6 @@ const MORE_LINKS: { href: string; label: string }[] = [
   { href: "/review", label: "Review new accounts" },
   { href: "/outliers", label: "Transcription queue" },
   { href: "/transcripts", label: "Transcripts" },
-  { href: "/hooks", label: "Hook library" },
   { href: "/reports", label: "Monthly reports" },
   { href: "/status", label: "Status" },
   { href: "/data", label: "Raw tables" },
