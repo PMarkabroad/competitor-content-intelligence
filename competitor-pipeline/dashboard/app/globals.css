@@ -42,18 +42,43 @@
   --font-mono: var(--font-plex-mono), ui-monospace, monospace;
 }
 
-html {
-  color-scheme: light;
-}
+/* These element rules MUST live in @layer base.
+   Tailwind v4 emits its utilities inside @layer utilities, and in the CSS
+   cascade an UNLAYERED rule beats every layered one regardless of
+   specificity. An unlayered `a { color: inherit }` therefore overrode
+   `text-bg`, `text-dim`, `text-brand` and every other colour utility
+   applied directly to a link -- which made the active nav item render as
+   dark text on a black pill, i.e. invisible. Scores kept working only
+   because they sit in a <span> inside the link rather than on the <a>. */
+@layer base {
+  html {
+    color-scheme: light;
+  }
 
-body {
-  background: var(--color-bg);
-  color: var(--color-text);
-  font-family: var(--font-sans);
-  font-size: 14px;
-  line-height: 1.5;
-  -webkit-font-smoothing: antialiased;
-  text-rendering: optimizeLegibility;
+  body {
+    background: var(--color-bg);
+    color: var(--color-text);
+    font-family: var(--font-sans);
+    font-size: 14px;
+    line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }
+
+  a {
+    color: inherit;
+  }
+
+  h1,
+  h2,
+  h3 {
+    letter-spacing: -0.018em;
+    font-weight: 600;
+  }
+
+  table {
+    font-variant-numeric: tabular-nums;
+  }
 }
 
 /* Every figure in the product is tabular, so columns of scores line up
@@ -65,24 +90,9 @@ body {
   letter-spacing: -0.02em;
 }
 
-table {
-  font-variant-numeric: tabular-nums;
-}
-
 ::selection {
   background: var(--color-text);
   color: var(--color-bg);
-}
-
-a {
-  color: inherit;
-}
-
-h1,
-h2,
-h3 {
-  letter-spacing: -0.018em;
-  font-weight: 600;
 }
 
 :focus-visible {
