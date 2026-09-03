@@ -36,7 +36,7 @@ export function DraftStatusActions({
         type="button"
         onClick={handleCopy}
         className={`rounded px-2 py-1 text-[11px] font-medium transition-colors ${
-          copied ? "bg-good-soft text-good" : "bg-white/[0.06] text-dim hover:bg-white/[0.1] hover:text-text"
+          copied ? "bg-good-soft text-good" : "border border-border bg-surface text-dim hover:bg-surface-hover hover:text-text"
         }`}
       >
         {copied ? "Copied ✓" : "Copy"}
@@ -46,7 +46,7 @@ export function DraftStatusActions({
           type="button"
           disabled={pending}
           onClick={() => startTransition(() => updateDraftStatus(draftId, "used"))}
-          className="rounded bg-white/[0.06] px-2 py-1 text-[11px] font-medium text-dim transition-colors hover:bg-good-soft hover:text-good disabled:opacity-50"
+          className="rounded border border-border bg-surface px-2 py-1 text-[11px] font-medium text-dim transition-colors hover:bg-good-soft hover:text-good disabled:opacity-50"
         >
           Mark used
         </button>
@@ -56,7 +56,7 @@ export function DraftStatusActions({
           type="button"
           disabled={pending}
           onClick={() => startTransition(() => updateDraftStatus(draftId, "dismissed"))}
-          className="rounded bg-white/[0.06] px-2 py-1 text-[11px] font-medium text-dim transition-colors hover:bg-bad-soft hover:text-bad disabled:opacity-50"
+          className="rounded border border-border bg-surface px-2 py-1 text-[11px] font-medium text-dim transition-colors hover:bg-bad-soft hover:text-bad disabled:opacity-50"
         >
           Dismiss
         </button>

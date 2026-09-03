@@ -1,5 +1,5 @@
 const TONES = {
-  neutral: "bg-white/[0.06] text-dim",
+  neutral: "border border-border bg-surface-hover text-dim",
   good: "bg-good-soft text-good",
   warn: "bg-warn-soft text-warn",
   bad: "bg-bad-soft text-bad",

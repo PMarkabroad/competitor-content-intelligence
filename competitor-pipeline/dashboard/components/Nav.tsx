@@ -44,11 +44,13 @@ function NavLink({ href, label, active }: { href: string; label: string; active:
   return (
     <Link
       href={href}
-      className={`relative rounded-md px-3 py-1.5 text-[13px] transition-colors ${
-        active ? "bg-brand-soft font-medium text-brand" : "text-dim hover:bg-surface-hover hover:text-text"
+      aria-current={active ? "page" : undefined}
+      className={`rounded-lg px-3 py-2 text-[13px] transition-colors ${
+        active
+          ? "bg-brand font-medium text-white"
+          : "text-dim hover:bg-surface-hover hover:text-text"
       }`}
     >
-      {active && <span className="absolute -left-2.5 top-1/2 h-4 w-0.5 -translate-y-1/2 rounded-full bg-brand" />}
       {label}
     </Link>
   );
@@ -60,15 +62,15 @@ export function Nav() {
   const [moreOpen, setMoreOpen] = useState(moreHasActive);
 
   return (
-    <nav className="flex h-full w-48 shrink-0 flex-col overflow-y-auto border-r border-border bg-surface/60 backdrop-blur-sm">
+    <nav className="flex h-full w-56 shrink-0 flex-col overflow-y-auto border-r border-border bg-surface">
       <Link
         href="/"
-        className="flex items-center gap-2 border-b border-border px-4 py-4 transition-colors hover:bg-surface-hover"
+        className="flex items-baseline gap-2 border-b border-border px-4 py-5 transition-colors hover:bg-surface-hover"
       >
-        <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-brand" />
-        <span className="text-[13px] font-semibold tracking-tight text-text">Ark Competitor Intel</span>
+        <span className="text-[15px] font-semibold tracking-tight text-text">Ark</span>
+        <span className="text-[13px] text-faint">competitor intel</span>
       </Link>
-      <div className="flex flex-col gap-0.5 p-2.5">
+      <div className="flex flex-col gap-1 p-3">
         {PRIMARY_LINKS.map((link) => (
           <NavLink key={link.href} href={link.href} label={link.label} active={isActive(pathname, link.href)} />
         ))}
@@ -76,13 +78,13 @@ export function Nav() {
         <button
           type="button"
           onClick={() => setMoreOpen((v) => !v)}
-          className="mt-2 flex items-center justify-between rounded-md px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wide text-faint hover:text-dim"
+          className="mt-3 flex items-center justify-between rounded-lg px-3 py-2 text-[13px] text-faint transition-colors hover:bg-surface-hover hover:text-dim"
         >
           More
-          <span className="text-[11px]">{moreOpen ? "\u2212" : "+"}</span>
+          <span aria-hidden>{moreOpen ? "\u2212" : "+"}</span>
         </button>
         {moreOpen && (
-          <div className="flex flex-col gap-0.5">
+          <div className="flex flex-col gap-1">
             {MORE_LINKS.map((link) => (
               <NavLink key={link.href} href={link.href} label={link.label} active={isActive(pathname, link.href)} />
             ))}

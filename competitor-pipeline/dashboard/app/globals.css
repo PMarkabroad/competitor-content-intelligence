@@ -1,36 +1,48 @@
 @import "tailwindcss";
 
+/* Light, warm-neutral ground with a deep petrol brand.
+   Why light: this tool is almost entirely text -- hook lines, transcripts,
+   scripts, brand-fit notes, dense tables. Long text at 11-13px on a
+   near-black ground is measurably harder to scan, and scanning is the
+   whole job here.
+   Why warm-neutral rather than cream: cream + serif + terracotta is the
+   default "considered" palette and reads as templated. This is a couple of
+   degrees warm, no more, so white panels still separate from it.
+   Why petrol rather than blue: the accent carries the outlier scores,
+   which are the point of the product. Petrol reads as instrument-panel
+   precise, and isn't the default SaaS blue. */
 @theme {
-  --color-bg: #0a0a0b;
-  --color-surface: #131316;
-  --color-surface-hover: #1a1a1f;
-  --color-border: #232329;
-  --color-border-strong: #333340;
-  --color-brand: #2b65fc;
-  --color-brand-soft: #2b65fc1f;
-  --color-text: #edeef0;
-  --color-dim: #9a9aa4;
-  --color-faint: #626269;
-  --color-good: #3ecf6a;
-  --color-good-soft: #3ecf6a1a;
-  --color-warn: #e8b339;
-  --color-warn-soft: #e8b3391a;
-  --color-bad: #f2555b;
-  --color-bad-soft: #f2555b1a;
+  --color-bg: #f6f6f3;
+  --color-surface: #ffffff;
+  --color-surface-hover: #f0f0ec;
+  --color-border: #e4e4de;
+  --color-border-strong: #cbcbc3;
+  --color-brand: #0f6b62;
+  --color-brand-soft: #0f6b6214;
+  --color-text: #17171a;
+  --color-dim: #55555d;
+  --color-faint: #86868f;
+  --color-good: #15734a;
+  --color-good-soft: #15734a14;
+  --color-warn: #96620a;
+  --color-warn-soft: #96620a14;
+  --color-bad: #a92b22;
+  --color-bad-soft: #a92b2214;
   --font-sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
   --font-mono: ui-monospace, "SF Mono", "Cascadia Code", Consolas, monospace;
 }
 
 html {
-  color-scheme: dark;
+  color-scheme: light;
 }
 
 body {
   background: var(--color-bg);
   color: var(--color-text);
   font-family: var(--font-sans);
-  font-size: 13px;
-  line-height: 1.45;
+  /* Was 13px, which is cramped for the amount of prose on these screens. */
+  font-size: 14px;
+  line-height: 1.5;
   -webkit-font-smoothing: antialiased;
   text-rendering: optimizeLegibility;
 }
@@ -51,7 +63,7 @@ a {
 h1,
 h2,
 h3 {
-  letter-spacing: -0.01em;
+  letter-spacing: -0.015em;
 }
 
 /* Dense scrollbars -- this is a data tool, not a marketing page. */
@@ -71,12 +83,14 @@ h3 {
   background: var(--color-faint);
 }
 
-/* Shared card treatment -- subtle depth without decoration. */
+/* Shared card treatment. On a light ground the old inset highlight and
+   heavy drop shadow just muddy it -- a hairline border plus a very soft
+   lift is enough to separate white from the warm ground. */
 .panel {
   background: var(--color-surface);
   border: 1px solid var(--color-border);
   border-radius: 10px;
-  box-shadow: 0 1px 0 0 rgba(255, 255, 255, 0.02) inset, 0 8px 24px -12px rgba(0, 0, 0, 0.5);
+  box-shadow: 0 1px 2px 0 rgba(23, 23, 26, 0.04);
 }
 
 .data-table thead th {
@@ -92,34 +106,41 @@ h3 {
 
 /* Rendered markdown for /reports -- generated from our own report
    files (see out/hook_report_*.md), not third-party/user content. */
+.report-markdown {
+  /* Reports are the longest prose in the product; hold them to a readable
+     measure instead of letting lines run the full width. */
+  max-width: 74ch;
+}
 .report-markdown h1 {
   margin: 0 0 0.75rem;
-  font-size: 1.1rem;
+  font-size: 1.3rem;
   font-weight: 600;
   color: var(--color-text);
-  letter-spacing: -0.01em;
+  letter-spacing: -0.02em;
 }
 .report-markdown h2 {
-  margin: 1.5rem 0 0.5rem;
-  font-size: 0.95rem;
+  margin: 1.75rem 0 0.5rem;
+  font-size: 1.05rem;
   font-weight: 600;
   color: var(--color-text);
 }
 .report-markdown h3 {
   margin: 1.25rem 0 0.4rem;
-  font-size: 0.85rem;
+  font-size: 0.92rem;
   font-weight: 600;
   color: var(--color-text);
 }
 .report-markdown p {
-  margin: 0 0 0.75rem;
+  margin: 0 0 0.85rem;
+  line-height: 1.6;
 }
 .report-markdown ul,
 .report-markdown ol {
-  margin: 0 0 0.75rem 1.25rem;
+  margin: 0 0 0.85rem 1.25rem;
 }
 .report-markdown li {
-  margin-bottom: 0.25rem;
+  margin-bottom: 0.3rem;
+  line-height: 1.55;
 }
 .report-markdown strong {
   color: var(--color-text);
@@ -130,14 +151,30 @@ h3 {
   text-decoration: underline;
 }
 .report-markdown hr {
-  margin: 1.5rem 0;
+  margin: 1.75rem 0;
   border: none;
   border-top: 1px solid var(--color-border);
 }
 .report-markdown code {
-  background: var(--color-bg);
+  background: var(--color-surface-hover);
   border-radius: 4px;
   padding: 0.1em 0.35em;
   font-family: var(--font-mono);
   font-size: 0.85em;
+}
+.report-markdown table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 0 0 1rem;
+  font-size: 0.9em;
+}
+.report-markdown th,
+.report-markdown td {
+  border-bottom: 1px solid var(--color-border);
+  padding: 0.4rem 0.6rem;
+  text-align: left;
+}
+.report-markdown th {
+  color: var(--color-faint);
+  font-weight: 500;
 }
