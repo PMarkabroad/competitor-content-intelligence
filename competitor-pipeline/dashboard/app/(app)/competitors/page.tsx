@@ -42,12 +42,37 @@ export default async function CompetitorsPage({
   const { data, error } = await supabase.from("v_competitor_summary").select("*");
   if (error) throw new Error(`Failed to load v_competitor_summary: ${error.message}`);
 
-  let rows = (data ?? []) as CompetitorSummary[];
+  // What each account has actually CONTRIBUTED, not just how big it is.
+  // Follower count says nothing about whether an account is worth the
+  // harvest spend -- several large ones here only ever produce job-listing
+  // reposts or lifestyle clips, which tag out as unusable. Counting usable
+  // hooks per account turns the roster into "who's earning their keep".
+  const { data: hookRows, error: hookErr } = await supabase
+    .from("hook_library")
+    .select("competitor_id, brand_fit");
+  if (hookErr) throw new Error(`Failed to load hook_library: ${hookErr.message}`);
+
+  const contribution = new Map<string, { tagged: number; usable: number }>();
+  for (const h of hookRows ?? []) {
+    const c = contribution.get(h.competitor_id) ?? { tagged: 0, usable: 0 };
+    c.tagged++;
+    // brand_fit 'no' trips a Never-ships rule, so it can never become an
+    // Ark video -- it counts as tagged but not as usable.
+    if (h.brand_fit !== "no") c.usable++;
+    contribution.set(h.competitor_id, c);
+  }
+
+  let rows = ((data ?? []) as CompetitorSummary[]).map((r) => ({
+    ...r,
+    tagged_hooks: contribution.get(r.competitor_id)?.tagged ?? 0,
+    usable_hooks: contribution.get(r.competitor_id)?.usable ?? 0,
+  }));
   if (params.market) rows = rows.filter((r) => r.market === params.market);
   if (params.platform) rows = rows.filter((r) => r.platform === params.platform);
   if (params.tier) rows = rows.filter((r) => r.tier === params.tier);
 
-  const sortKey = (params.sort ?? "followers_current") as keyof CompetitorSummary;
+  type Row = (typeof rows)[number];
+  const sortKey = (params.sort ?? "usable_hooks") as keyof Row;
   const dir = params.dir === "asc" ? 1 : -1;
   rows = [...rows].sort((a, b) => {
     const av = a[sortKey];
@@ -75,7 +100,11 @@ export default async function CompetitorsPage({
       <div className="mb-4 flex items-baseline justify-between">
         <div>
           <h1 className="text-sm font-semibold text-text">Competitors</h1>
-          <p className="text-xs text-dim">{rows.length} account(s)</p>
+          <p className="max-w-[70ch] text-xs leading-relaxed text-dim">
+            {rows.length} accounts. Sorted by usable hooks — how many of their videos we&rsquo;ve turned
+            into something we could build on. An account with posts collected but no usable hooks is
+            costing collection budget and returning nothing.
+          </p>
         </div>
         <form method="get" className="flex items-center gap-2">
           <select name="market" defaultValue={params.market ?? ""} className="rounded-md border border-border bg-surface px-2 py-1.5 text-xs text-text">
@@ -98,16 +127,15 @@ export default async function CompetitorsPage({
         <table className="w-full border-collapse text-left text-xs">
           <thead>
             <tr className="border-b border-border bg-surface text-faint">
-              <th className="px-2 py-2 font-medium">Handle</th>
-              <th className="px-2 py-2 font-medium">Tier</th>
+              <th className="px-2 py-2 font-medium">Account</th>
               <th className="px-2 py-2 font-medium">Market</th>
+              <th className="px-2 py-2 font-medium text-right">{sortLink("usable_hooks", "Usable hooks")}</th>
               <th className="px-2 py-2 font-medium text-right">{sortLink("followers_current", "Followers")}</th>
-              <th className="px-2 py-2 font-medium text-right">{sortLink("follower_change_30d", "Δ30d")}</th>
+              <th className="px-2 py-2 font-medium text-right">{sortLink("follower_change_30d", "30d")}</th>
               <th className="px-2 py-2 font-medium text-right">{sortLink("posts_collected", "Posts")}</th>
-              <th className="px-2 py-2 font-medium text-right">{sortLink("posts_per_week", "Posts/wk")}</th>
-              <th className="px-2 py-2 font-medium text-right">{sortLink("median_vpf", "Median VPF")}</th>
-              <th className="px-2 py-2 font-medium">Active</th>
-              <th className="px-2 py-2 font-medium">Last activity</th>
+              <th className="px-2 py-2 font-medium text-right">{sortLink("posts_per_week", "Per week")}</th>
+              <th className="px-2 py-2 font-medium text-right">{sortLink("median_vpf", "Views/follower")}</th>
+              <th className="px-2 py-2 font-medium">Status</th>
             </tr>
           </thead>
           <tbody>
@@ -117,10 +145,19 @@ export default async function CompetitorsPage({
                 <tr key={r.competitor_id} className="border-b border-border last:border-b-0 hover:bg-surface-hover">
                   <td className="px-2 py-2">
                     <Link href={`/competitors/${r.handle}`} className="font-medium text-brand hover:underline">{r.handle}</Link>
-                    <div className="text-faint">{r.name} · {r.platform}</div>
+                    <div className="text-faint">{r.name} · {r.platform} · {r.tier}</div>
                   </td>
-                  <td className="px-2 py-2"><Badge tone="brand">{r.tier}</Badge></td>
                   <td className="px-2 py-2 text-dim">{r.market}</td>
+                  <td className="px-2 py-2 text-right">
+                    {r.usable_hooks > 0 ? (
+                      <span className="font-semibold text-brand">{r.usable_hooks}</span>
+                    ) : (
+                      <span className="text-faint">0</span>
+                    )}
+                    {r.tagged_hooks > r.usable_hooks && (
+                      <span className="text-faint"> / {r.tagged_hooks}</span>
+                    )}
+                  </td>
                   <td className="px-2 py-2 text-right">{formatNumber(r.followers_current)}</td>
                   <td className="px-2 py-2 text-right text-dim">{formatChange(r.follower_change_30d)}</td>
                   <td className="px-2 py-2 text-right">{r.posts_collected}</td>
@@ -130,8 +167,11 @@ export default async function CompetitorsPage({
                     <Badge tone={r.active ? "good" : "neutral"}>{r.active ? "active" : "inactive"}</Badge>
                     {overdue && <span className="ml-1"><Badge tone="bad">overdue</Badge></span>}
                     {r.low_median_flag && <span className="ml-1"><Badge tone="warn">low median</Badge></span>}
+                    {r.active && r.posts_collected >= 10 && r.usable_hooks === 0 && (
+                      <span className="ml-1"><Badge tone="warn">nothing usable</Badge></span>
+                    )}
+                    <div className="mt-0.5 text-faint">{formatDate(r.last_activity_at)}</div>
                   </td>
-                  <td className="px-2 py-2 text-dim">{formatDate(r.last_activity_at)}</td>
                 </tr>
               );
             })}
