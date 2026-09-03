@@ -36,6 +36,8 @@ Follow "Never ships" strictly, with no exceptions.
 
 On numbers: the guide above includes the full proof bank. Every figure you write must appear there verbatim. Do not extrapolate from it, round it up, combine figures into a new one, or invent a plausible-sounding statistic. If you want a number the proof bank doesn't have, write the sentence without a number instead. The voice demands cost accounting, but an unverifiable figure in a migration-adjacent business is a complaint, not a hook.
 
+This applies to INVENTED EXAMPLES too, not just claims about Ark. Do not write a specific vacancy, employer, city, or salary as though it exists -- no "a mining company in Perth is hiring a data analyst for $95,000", no "two hundred people will apply", no invented job posting used to illustrate a point. A reader cannot tell an illustration from a real market claim, and neither can a complainant. Make the same point with the mechanism instead of a fabricated instance: describe what a job posting does, not a job posting you made up. Naming a real employer is separately banned by Never ships item 6.
+
 On visas: never state or imply anything about visa outcomes, sponsorship eligibility, or migration pathways. Immigration assistance is a regulated activity in Australia and Ark Abroad is a career accelerator, not a migration agent. If the competitor's post makes visa or immigration claims, drop them entirely rather than adapting them -- do not carry over any specific legal claim.
 
 On personal history: Green-tier story material only. Never use Amber-tier detail (health, family finances, relationships, mental health, rage-bait history), even if the competitor's post does something similar.

@@ -1,5 +1,6 @@
 import { getSupabaseServerClient } from "@/lib/supabase";
 import { formatScore } from "@/lib/format";
+import { shapeOf, blurbFor, cleanText } from "@/lib/shapes";
 
 export const dynamic = "force-dynamic";
 
@@ -27,75 +28,6 @@ interface Row {
   competitors: { name: string; market: string } | null;
 }
 
-interface Family {
-  name: string;
-  blurb: string;
-  test: RegExp;
-}
-
-// Ordered: the first match wins, so the more specific families come first.
-// Countdown sits above Numbered list because it's a distinct device worth
-// copying on its own (the #1 is withheld to drive comments), and its text
-// contains "numbered" so the list rule would otherwise swallow it.
-const FAMILIES: Family[] = [
-  {
-    name: "Job posting",
-    blurb: "A live vacancy read out: pay, company, duties, who qualifies, where to apply.",
-    test: /job (alert|drop|posting|lead)|(pay|salary)\s*(figure|hook|band|\+|and)|where to apply|application path|apply\b|opportunity announcement|vacancy|link CTA|entry.level.claim/i,
-  },
-  {
-    name: "Countdown",
-    blurb: "Counts down to number one and holds it back, usually pushing people into the comments for it.",
-    test: /countdown|\b\d+\s*to\s*1\b|withheld for comments|#1 withheld/i,
-  },
-  {
-    name: "Numbered list",
-    blurb: "A counted run of tips, employers or examples, often teasing the last one to hold people to the end.",
-    test: /numbered list|list of (two|three|four|five|six|seven|eight|nine|ten|\d)|ranked list|\blisticle\b|enumerated|\b(two|three|four|five|six|seven|eight|nine|ten|\d+)\s+(named|options|fixes|signals|translations|tips|steps|reasons|mechanisms|scripts|employers)/i,
-  },
-  {
-    name: "Myth broken",
-    blurb: "Name the belief the viewer holds, break it, then explain the real mechanism.",
-    test: /belief|myth|assumption|misconception|reject the easy explanation|live contradiction|contradiction/i,
-  },
-  {
-    name: "Question opener",
-    blurb: "Open on a question aimed straight at the viewer, then answer it immediately.",
-    test: /question ->|rhetorical question|qualifying question|direct question|question opener|qualifying if.statement|audience call.out/i,
-  },
-  {
-    name: "Story cold open",
-    blurb: "Drop into a moment or incident first; the topic only becomes clear afterwards.",
-    test: /cold open|story|incident|scenario setup|biographical|experiment setup|shared experience/i,
-  },
-  {
-    name: "Audit or teardown",
-    blurb: "Walk through something real — a resume, a profile, a site — and mark what's wrong.",
-    test: /audit|teardown|breakdown|section|review|before\/after|before and after|walkthrough|step.by.step|demystified/i,
-  },
-  {
-    name: "Warning",
-    blurb: "Lead with the thing that will cost them, then what to do instead.",
-    test: /warning|mistake|red flag|don'?t\b|avoid|stop doing|never fabricate|reality check/i,
-  },
-  {
-    name: "Claim then proof",
-    blurb: "State a flat claim up front, then stack the evidence or reasoning behind it.",
-    test: /^claim|claim \+|thesis statement|verdict|promise|stat|evidence|comparison/i,
-  },
-];
-
-function familyOf(structure: string | null): string {
-  if (!structure) return "Other";
-  for (const f of FAMILIES) if (f.test.test(structure)) return f.name;
-  return "Other";
-}
-
-function clean(s: string | null): string | null {
-  if (!s) return null;
-  const t = s.trim();
-  return !t || t.toLowerCase() === "null" ? null : t;
-}
 
 export default async function FormatsPage() {
   const supabase = getSupabaseServerClient();
@@ -106,12 +38,12 @@ export default async function FormatsPage() {
   if (error) throw new Error(`Failed to load hook_library: ${error.message}`);
 
   const rows = ((data ?? []) as unknown as Row[]).filter(
-    (r) => r.brand_fit !== "no" && clean(r.narrative_structure)
+    (r) => r.brand_fit !== "no" && cleanText(r.narrative_structure)
   );
 
   const grouped = new Map<string, Row[]>();
   for (const r of rows) {
-    const fam = familyOf(r.narrative_structure);
+    const fam = shapeOf(r.narrative_structure);
     if (!grouped.has(fam)) grouped.set(fam, []);
     grouped.get(fam)!.push(r);
   }
@@ -122,7 +54,7 @@ export default async function FormatsPage() {
       rows: rs,
       count: rs.length,
       score: rs.reduce((s, r) => s + (r.outlier_score ?? 0), 0) / rs.length,
-      blurb: FAMILIES.find((f) => f.name === name)?.blurb ?? "Structures that don't fit the other shapes.",
+      blurb: blurbFor(name),
     }))
     .sort((a, b) => b.count - a.count);
 
@@ -182,7 +114,7 @@ export default async function FormatsPage() {
                 </span>
                 <span className="min-w-0 flex-1">
                   <span className="block text-[13px] leading-snug text-text">
-                    {clean(r.narrative_structure)}
+                    {cleanText(r.narrative_structure)}
                   </span>
                   <span className="mt-0.5 block text-[11px] text-faint">
                     {r.competitors?.name ?? "unknown"} · {r.competitors?.market ?? "—"}

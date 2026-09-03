@@ -1,8 +1,8 @@
 import { getSupabaseServerClient } from "@/lib/supabase";
-import { Badge } from "@/components/Badge";
 import { CopyDumpButton } from "@/components/CopyDumpButton";
 import { GenerateDraftButton, type DraftPayload } from "@/components/GenerateDraftButton";
-import { formatScore, formatVpf, formatNumber } from "@/lib/format";
+import { formatScore, formatNumber, formatVpf } from "@/lib/format";
+import { shapeOf, cleanText } from "@/lib/shapes";
 
 export const dynamic = "force-dynamic";
 
@@ -52,16 +52,18 @@ interface Card {
   vpf: number | null;
   views: number | null;
   post_url: string | null;
-  badges: string[];
-  whyItWorked: string | null;
-  transplantNote: string | null;
-  brandFit: string | null;
-  brandFitNote: string | null;
+  shape: string;
+  structure: string | null;
+  draft: StoredDraft | null;
   copyDumpText: string;
   draftPayload: DraftPayload;
 }
 
-const BRAND_FIT_TONE: Record<string, "good" | "warn" | "bad"> = { yes: "good", with_changes: "warn", no: "bad" };
+interface StoredDraft {
+  hook: string;
+  script: string;
+  caption: string;
+}
 
 export default async function ContentIdeasPage() {
   const supabase = getSupabaseServerClient();
@@ -111,6 +113,22 @@ export default async function ContentIdeasPage() {
     for (const c of comps ?? []) competitorById.set(c.competitor_id, { name: c.name, market: c.market });
   }
 
+  // Drafts already generated for these posts, so a card can show the
+  // finished draft instead of a button that makes you wait. Newest wins
+  // if a post was drafted more than once.
+  const draftByPostId = new Map<string, StoredDraft>();
+  const { data: existingDrafts } = await supabase
+    .from("generated_drafts")
+    .select("source_post_id, hook, script, caption, created_at")
+    .not("source_post_id", "is", null)
+    .neq("status", "dismissed")
+    .order("created_at", { ascending: false });
+  for (const d of existingDrafts ?? []) {
+    if (d.source_post_id && !draftByPostId.has(d.source_post_id)) {
+      draftByPostId.set(d.source_post_id, { hook: d.hook, script: d.script, caption: d.caption });
+    }
+  }
+
   // Build unified cards per market.
   const cardsByMarket: Record<string, Card[]> = { AU: [], US: [], CA: [] };
 
@@ -137,11 +155,9 @@ export default async function ContentIdeasPage() {
       vpf: row.vpf,
       views: null,
       post_url: row.competitor_posts?.post_url ?? null,
-      badges: [row.hook_pattern, row.format, row.topic_slug].filter((b): b is string => !!b),
-      whyItWorked: row.why_it_performed,
-      transplantNote: row.au_transplant ? `(${row.au_transplant}) ${row.transplant_note ?? ""}` : null,
-      brandFit: row.brand_fit,
-      brandFitNote: row.brand_fit_note,
+      shape: shapeOf(row.narrative_structure),
+      structure: cleanText(row.narrative_structure),
+      draft: draftByPostId.get(row.post_id) ?? null,
       copyDumpText: dumpLines.join("\n"),
       draftPayload: {
         competitor_name: competitorName,
@@ -183,11 +199,9 @@ export default async function ContentIdeasPage() {
       vpf: row.vpf,
       views: row.views,
       post_url: post?.post_url ?? null,
-      badges: ["not transcribed"],
-      whyItWorked: null,
-      transplantNote: null,
-      brandFit: null,
-      brandFitNote: null,
+      shape: "Not known yet",
+      structure: null,
+      draft: draftByPostId.get(row.post_id) ?? null,
       copyDumpText: dumpLines.join("\n"),
       draftPayload: {
         competitor_name: competitorName,
@@ -230,29 +244,51 @@ export default async function ContentIdeasPage() {
                     </p>
                     <span className="shrink-0 font-mono text-sm font-semibold text-brand">{formatScore(card.outlier_score)}</span>
                   </div>
-                  <div className="mb-2 flex flex-wrap gap-1">
-                    {card.badges.map((b) => (
-                      <Badge key={b} tone={b === "not transcribed" ? "warn" : "neutral"}>{b}</Badge>
-                    ))}
-                    {card.brandFit && <Badge tone={BRAND_FIT_TONE[card.brandFit] ?? "neutral"}>brand_fit: {card.brandFit}</Badge>}
-                  </div>
-                  <p className="mb-2 text-xs text-dim">
-                    {card.draftPayload.competitor_name} · vpf {formatVpf(card.vpf)}
+                  <p className="mb-2 text-[11px] text-faint">
+                    {card.draftPayload.competitor_name} · {market}
                     {card.views != null && ` · ${formatNumber(card.views)} views`}
                   </p>
-                  {card.whyItWorked && (
-                    <p className="mb-2 text-xs text-dim"><span className="text-faint">Why it worked:</span> {card.whyItWorked}</p>
+
+                  {/* What to make -- the shape, then the exact running
+                      order. This replaces the transplant_note paragraph
+                      that used to sit here: several hundred words of
+                      judgement on a card whose job is to be scanned. That
+                      note is still on the reel page for anyone who wants
+                      it. */}
+                  <div className="mb-3 rounded-md border border-border bg-surface px-2.5 py-2">
+                    <p className="text-[10px] font-semibold uppercase tracking-wide text-faint">Make this as</p>
+                    <p className="mt-0.5 text-xs font-medium text-text">{card.shape}</p>
+                    {card.structure && (
+                      <p className="mt-1 text-[11px] leading-relaxed text-dim">{card.structure}</p>
+                    )}
+                    {card.kind === "raw" && (
+                      <p className="mt-1 text-[11px] text-warn">Not transcribed yet, so the shape is unknown.</p>
+                    )}
+                  </div>
+
+                  {card.draft ? (
+                    <details className="mb-2 rounded-md border border-border bg-surface">
+                      <summary className="cursor-pointer px-2.5 py-2 text-xs font-medium text-good">
+                        Draft ready &mdash; open it
+                      </summary>
+                      <div className="border-t border-border px-2.5 py-2">
+                        <p className="mb-1.5 text-xs font-medium text-text">{card.draft.hook}</p>
+                        <p className="mb-1.5 whitespace-pre-wrap text-[11px] leading-relaxed text-dim">{card.draft.script}</p>
+                        <p className="text-[11px] italic text-faint">Caption: {card.draft.caption}</p>
+                      </div>
+                    </details>
+                  ) : (
+                    <div className="mb-2">
+                      <GenerateDraftButton payload={card.draftPayload} />
+                    </div>
                   )}
-                  {card.transplantNote && (
-                    <p className="mb-2 text-xs text-dim"><span className="text-faint">For Ark:</span> {card.transplantNote}</p>
-                  )}
-                  <div className="mb-2 flex items-center justify-between gap-2 border-t border-border pt-2">
+
+                  <div className="mt-auto flex items-center justify-between gap-2 border-t border-border pt-2">
                     {card.post_url ? (
                       <a href={card.post_url} target="_blank" rel="noreferrer" className="text-xs text-brand hover:underline">Original post →</a>
                     ) : <span />}
                     <CopyDumpButton text={card.copyDumpText} />
                   </div>
-                  <GenerateDraftButton payload={card.draftPayload} />
                 </div>
               ))}
             </div>
