@@ -70,6 +70,9 @@ interface ActorsConfig {
   tiktokSearch: ActorPin;
   tiktokPosts: ActorPin;
   tiktokProfile: ActorPin;
+  // Instagram candidates come from discover_instagram.ts and are profiled
+  // with Instagram's own actor -- the TikTok one returns nothing for them.
+  profile: ActorPin;
 }
 
 function loadActors(): ActorsConfig {
@@ -252,7 +255,7 @@ async function stageProfile(apifyToken: string, confirmed: boolean) {
 
   const { data: pending, error } = await supabase
     .from("discovery_candidates")
-    .select("candidate_id, handle")
+    .select("candidate_id, handle, platform")
     .is("followers", null)
     // Excludes rows already marked terminal (e.g. "profile scrape
     // returned no data" from a prior --profile run) -- without this,
@@ -276,8 +279,12 @@ async function stageProfile(apifyToken: string, confirmed: boolean) {
   // 0.002/result is BRONZE-tier pricing for clockworks/tiktok-profile-
   // scraper's "result" event (was 0.003 at FREE, updated 2026-08-26 --
   // see the search-stage estimate above for the same update).
-  const baseProfileUsd = pending.length * 1 * 0.002;
-  const classifyCaptionsUsd = pending.length * (PROFILE_RESULTS_PER_PAGE - 1) * 0.002;
+  const tiktokCount = pending.filter((p) => (p.platform ?? "tiktok") === "tiktok").length;
+  const instagramCount = pending.filter((p) => p.platform === "instagram").length;
+  // Instagram's profile actor bills per call (~$0.0023) and returns the
+  // latest posts in the same item, so it needs no extra caption results.
+  const baseProfileUsd = tiktokCount * 1 * 0.002 + instagramCount * 0.0023;
+  const classifyCaptionsUsd = tiktokCount * (PROFILE_RESULTS_PER_PAGE - 1) * 0.002;
   const estimateUsd = Math.max(0.01, baseProfileUsd + classifyCaptionsUsd + 0.001);
   console.log(
     `  (base profile, 1 result/candidate: $${baseProfileUsd.toFixed(4)}; ` +
@@ -285,20 +292,68 @@ async function stageProfile(apifyToken: string, confirmed: boolean) {
   );
   if (!costGate("profile", estimateUsd, confirmed)) return;
 
-  const items = await runApifyActor(
-    actors.tiktokProfile,
-    { profiles: pending.map((p) => p.handle), profileScrapeSections: ["videos"], resultsPerPage: PROFILE_RESULTS_PER_PAGE },
-    apifyToken
-  );
-  console.log(`Profile stage returned ${items.length} item(s).`);
+  // Platform-aware: discovery now produces Instagram candidates as well as
+  // TikTok ones (see discover_instagram.ts), and they need different
+  // actors and read different field names off the response. Sending an
+  // Instagram handle to the TikTok profile scraper just burns a call and
+  // returns nothing.
+  const tiktokPending = pending.filter((p) => (p.platform ?? "tiktok") === "tiktok");
+  const instagramPending = pending.filter((p) => p.platform === "instagram");
 
   const itemsByHandle = new Map<string, Record<string, unknown>[]>();
-  for (const item of items) {
-    const author = (item.authorMeta ?? item.author ?? {}) as Record<string, unknown>;
-    const handle = String(author.name ?? author.uniqueId ?? item.uniqueId ?? "");
-    if (!handle) continue;
-    if (!itemsByHandle.has(handle)) itemsByHandle.set(handle, []);
-    itemsByHandle.get(handle)!.push(item);
+
+  if (tiktokPending.length > 0) {
+    const items = await runApifyActor(
+      actors.tiktokProfile,
+      { profiles: tiktokPending.map((p) => p.handle), profileScrapeSections: ["videos"], resultsPerPage: PROFILE_RESULTS_PER_PAGE },
+      apifyToken
+    );
+    console.log(`Profile stage (tiktok) returned ${items.length} item(s).`);
+    for (const item of items) {
+      const author = (item.authorMeta ?? item.author ?? {}) as Record<string, unknown>;
+      const handle = String(author.name ?? author.uniqueId ?? item.uniqueId ?? "");
+      if (!handle) continue;
+      if (!itemsByHandle.has(handle)) itemsByHandle.set(handle, []);
+      itemsByHandle.get(handle)!.push(item);
+    }
+  }
+
+  if (instagramPending.length > 0) {
+    // apify/instagram-profile-scraper returns one flat item per username,
+    // carrying followersCount/private/biography plus up to 12 latest
+    // posts. Normalised onto the same authorMeta shape the TikTok branch
+    // produces, so the gating code below stays single-path.
+    const items = await runApifyActor(
+      actors.profile,
+      { usernames: instagramPending.map((p) => p.handle) },
+      apifyToken
+    );
+    console.log(`Profile stage (instagram) returned ${items.length} item(s).`);
+    for (const item of items) {
+      const handle = String(item.username ?? "").toLowerCase();
+      if (!handle) continue;
+      const captions = Array.isArray(item.latestPosts)
+        ? (item.latestPosts as Record<string, unknown>[])
+            .map((post) => String(post.caption ?? ""))
+            .filter((t) => t.length > 0)
+            .slice(0, 3)
+        : [];
+      const normalised: Record<string, unknown> = {
+        authorMeta: {
+          name: handle,
+          fans: item.followersCount ?? null,
+          privateAccount: item.private ?? item.isPrivate ?? false,
+          signature: item.biography ?? null,
+        },
+        // The gating code reads captions off `text` on each item, so one
+        // synthetic item per caption keeps that path unchanged.
+        text: captions[0] ?? "",
+      };
+      itemsByHandle.set(handle, [
+        normalised,
+        ...captions.slice(1).map((c) => ({ ...normalised, text: c })),
+      ]);
+    }
   }
 
   const byHandle = new Map<string, string>(pending.map((p) => [p.handle, p.candidate_id]));
