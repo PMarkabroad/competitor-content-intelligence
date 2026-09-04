@@ -7,11 +7,23 @@ export const dynamic = "force-dynamic";
 
 export default async function DraftsPage() {
   const supabase = getSupabaseServerClient();
+  // Dismissed drafts are excluded, not badged. They were shown with a
+  // "dismissed" tag before, which meant an off-business draft still sat in
+  // the middle of the queue you scroll to pick tonight's post from -- the
+  // relevance audit dismissed 38 at once and every one of them stayed
+  // visible. A dismissed draft is a decision already made; it does not
+  // belong in the list of things to choose between.
   const { data: drafts } = await supabase
     .from("generated_drafts")
     .select("*")
+    .neq("status", "dismissed")
     .order("created_at", { ascending: false })
     .limit(100);
+
+  const { count: dismissedCount } = await supabase
+    .from("generated_drafts")
+    .select("*", { count: "exact", head: true })
+    .eq("status", "dismissed");
 
   const rows = drafts ?? [];
 
@@ -20,6 +32,7 @@ export default async function DraftsPage() {
       <h1 className="mb-1 text-sm font-semibold text-text">Ready-made posts</h1>
       <p className="mb-4 text-xs text-faint">
         Every draft generated from a competitor post, newest first. Nothing here is auto-posted -- review before using.
+        {dismissedCount ? ` ${dismissedCount} dismissed draft${dismissedCount === 1 ? "" : "s"} hidden.` : ""}
       </p>
 
       {rows.length === 0 ? (
