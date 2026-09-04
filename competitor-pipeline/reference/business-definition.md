@@ -24,10 +24,26 @@ for.
 Every generated post is written for a reader in Australia. There is no US
 audience and no Canadian audience.
 
-US and Canadian competitors are still tracked, and that is deliberate — they
-are the largest career-content accounts anywhere and their HOOK PATTERNS and
-FORMATS transfer. What does not transfer is their subject matter and their
-market. Borrow the shape, never the market.
+US and Canadian competitors are tracked deliberately and permanently. They
+are the largest career-content accounts anywhere, and watching them is the
+point of this pipeline — do not treat a US or Canadian account as
+off-business, and do not deactivate one for being foreign.
+
+The distinction that matters is **hooks versus posts**, and it is easy to
+get backwards:
+
+- **A hook is an observation about a competitor.** Judge it on whether its
+  SUBJECT would land with an internationally-trained person in Australia.
+  "If you're an immigrant who works in corporate America…" is about accent
+  bias at work — that transfers, and it is a keep. American framing is not
+  grounds for rejection; the framing is exactly what we rewrite. Reject a
+  hook only when the SUBJECT ITSELF is out of scope (visa attainment,
+  student recruitment, another country's immigration system, lifestyle
+  content, a regulated profession's registration).
+- **A post is something Ark publishes.** It is always written for a reader
+  in Australia. Never for a US or Canadian reader.
+
+Borrow the shape and the subject; never borrow the market.
 
 ## What we sell
 
