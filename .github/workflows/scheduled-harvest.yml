@@ -1,0 +1,86 @@
+# Runs the harvest on a timer so it no longer depends on anyone's laptop
+# being awake. The runner (competitor-pipeline/scripts/scheduled_harvest.ts)
+# has existed and been verified since 2026-08-26; only the trigger was
+# missing.
+#
+# Cadence follows scripts/schedule.md: T2 fortnightly, T3 monthly. T1 is
+# deliberately absent -- it is exempt from scoring and stays manual.
+#
+# Times are UTC (GitHub cron has no timezone). 19:00 UTC is early morning
+# in Melbourne, so a run lands before anyone looks at the dashboard.
+name: Scheduled harvest
+
+on:
+  schedule:
+    # T2 -- 1st and 15th. GitHub cron cannot express "every two weeks", and
+    # twice a month is the honest approximation of a fortnightly cadence.
+    - cron: "0 19 1,15 * *"
+    # T3 -- monthly, on the 2nd rather than the 1st so it never collides
+    # with a T2 run. Two harvests in the same minute would each read the
+    # same month-to-date spend and each believe the full remaining budget
+    # was theirs.
+    - cron: "0 19 2 * *"
+  workflow_dispatch:
+    inputs:
+      tier:
+        description: "Tier to harvest"
+        required: true
+        default: "T2"
+        type: choice
+        options: ["T2", "T3"]
+
+# One harvest at a time. Overlapping runs would double-spend against a cap
+# check that cannot see the other run in flight.
+concurrency:
+  group: scheduled-harvest
+  cancel-in-progress: false
+
+jobs:
+  harvest:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    defaults:
+      run:
+        working-directory: competitor-pipeline
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: competitor-pipeline/package-lock.json
+
+      - run: npm ci
+
+      # Which tier this run is for. A schedule fires with no inputs, so the
+      # cron expression that triggered it is what decides.
+      - name: Resolve tier
+        id: tier
+        run: |
+          if [ -n "${{ inputs.tier }}" ]; then
+            echo "value=${{ inputs.tier }}" >> "$GITHUB_OUTPUT"
+          elif [ "${{ github.event.schedule }}" = "0 19 2 * *" ]; then
+            echo "value=T3" >> "$GITHUB_OUTPUT"
+          else
+            echo "value=T2" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Harvest
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+          APIFY_TOKEN: ${{ secrets.APIFY_TOKEN }}
+        run: npm run scheduled-harvest -- --tier ${{ steps.tier.outputs.value }}
+
+      # Kept whether the harvest passed or was skipped for budget, because
+      # "skipped on cap" exits 0 by design and the log is the only place
+      # that says so.
+      - name: Upload run log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: harvest-${{ steps.tier.outputs.value }}-${{ github.run_id }}
+          path: competitor-pipeline/logs/
+          if-no-files-found: ignore
+          retention-days: 30

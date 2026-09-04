@@ -1,10 +1,16 @@
 # Orchestration schedule
 
-Describes the intended cron setup. **The runner script (`scheduled_harvest.ts`)
-is built and verified against real accounts (2026-08-26) — no OS-level
-schedule (cron/Task Scheduler/Apify Scheduler) has been registered to call
-it automatically yet.** That's still a deliberate, separate decision left
-open below, since it means real, unattended recurring spend.
+Describes the cron setup. **Wired up on 2026-09-04**: the trigger is
+`.github/workflows/scheduled-harvest.yml`, running on GitHub Actions so it
+no longer depends on anyone's laptop being awake. Times there are UTC, since
+GitHub cron has no timezone.
+
+This means real, unattended recurring spend -- roughly $5/month at 58
+accounts. The guard is `MONTHLY_APIFY_SPEND_CAP_USD`, checked against REAL
+month-to-date spend before a run starts. Note its limit: it compares spend
+against an ESTIMATE beforehand and cannot stop a run that overshoots
+mid-flight. That is exactly how spend reached $29.07 against a $29 cap on
+2026-09-04, so the cap is now set below the real ceiling on purpose.
 
 ## Harvest cadence, by tier
 
@@ -25,8 +31,12 @@ cap check only compares its estimate against the *full* cap, not remaining
 budget, so it is not spend-safe to run unattended on its own.
 
 Each scheduled run:
-1. Reads active, handle-verified competitors for that tier (AU/US only --
-   CA stays `active=false` and out of scope regardless).
+1. Reads active, handle-verified competitors for that tier. All markets --
+   `active=true` is the only thing that scopes it. This used to say "AU/US
+   only, CA stays active=false", which was true when written and is not any
+   more: there are 12 active CA accounts. A hardcoded market allowlist in
+   scheduled_harvest.ts silently excluded newly-approved CA accounts from
+   every run once that changed, and was removed on 2026-08-26.
 2. Checks REAL month-to-date Apify spend (not just this run's estimate)
    against `MONTHLY_APIFY_SPEND_CAP_USD`. If spend + this run's estimate
    would exceed the cap, the run is **skipped** (loud log to stdout +
