@@ -8,6 +8,16 @@
 #   20:00 UTC  harvest T3   19 Instagram
 #   21:00 UTC  content      transcribe -> hooks -> ready-made posts
 #
+# Plus a monthly discovery sweep on the 26th, which looks for competitors we
+# do not track yet and stops at a shortlist. It never promotes: passing the
+# gate means an account is healthy, not that it is a competitor. Of 45
+# accounts that passed every automated check, hand review kept 22; of the
+# next 79, none. A travel vlogger with 424k followers passes every gate
+# there is.
+#
+# The 26th because the Apify billing cycle resets on the 25th, so the sweep
+# meets a full budget rather than whatever the month left behind.
+#
 # Sunday 21:00 UTC is Monday 07:00 in Melbourne (08:00 under daylight
 # saving), so everything has landed before anyone opens the dashboard.
 #
@@ -20,6 +30,7 @@ on:
     - cron: "0 19 * * 0" # T2 harvest
     - cron: "0 20 * * 0" # T3 harvest
     - cron: "0 21 * * 0" # content chain
+    - cron: "0 18 26 * *" # monthly discovery sweep
   workflow_dispatch:
     inputs:
       mode:
@@ -27,7 +38,7 @@ on:
         required: true
         default: "content"
         type: choice
-        options: ["T2", "T3", "content"]
+        options: ["T2", "T3", "content", "discover"]
 
 # One at a time. Overlapping runs would double-spend against a cap check
 # that cannot see the other run in flight, and the content chain assumes
@@ -70,13 +81,41 @@ jobs:
             echo "value=T2" >> "$GITHUB_OUTPUT"
           elif [ "${{ github.event.schedule }}" = "0 20 * * 0" ]; then
             echo "value=T3" >> "$GITHUB_OUTPUT"
+          elif [ "${{ github.event.schedule }}" = "0 18 26 * *" ]; then
+            echo "value=discover" >> "$GITHUB_OUTPUT"
           else
             echo "value=content" >> "$GITHUB_OUTPUT"
           fi
 
       - name: Harvest
-        if: steps.mode.outputs.value != 'content'
+        if: steps.mode.outputs.value == 'T2' || steps.mode.outputs.value == 'T3'
         run: npm run scheduled-harvest -- --tier ${{ steps.mode.outputs.value }}
+
+      # --- monthly discovery ---------------------------------------------
+      # Five stages, all machine work, stopping before the sixth. Each Apify
+      # stage checks real month-to-date spend against the cap and skips
+      # rather than failing if it cannot afford to run -- --confirm alone is
+      # no longer a guard once it is a flag in a YAML file.
+      - name: Discover candidates
+        if: steps.mode.outputs.value == 'discover'
+        continue-on-error: true
+        run: |
+          npm run discover -- --search --confirm
+          npm run discover -- --profile --confirm
+          npm run discover -- --classify
+          npm run discover -- --gate --confirm
+          npm run discover -- --shortlist
+
+      # The shortlist is the deliverable. Kept as an artifact so the
+      # candidates can be reviewed without anyone re-running the sweep.
+      - name: Upload shortlist for review
+        if: steps.mode.outputs.value == 'discover'
+        uses: actions/upload-artifact@v4
+        with:
+          name: discovery-shortlist-${{ github.run_id }}
+          path: competitor-pipeline/out/discovery_shortlist_*.csv
+          if-no-files-found: warn
+          retention-days: 90
 
       # --- content chain -------------------------------------------------
       # Each step continues on error. A failure here should cost one stage,

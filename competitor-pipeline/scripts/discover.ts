@@ -54,6 +54,7 @@ import { parse } from "csv-parse/sync";
 import "dotenv/config";
 import { config } from "../config.ts";
 import { getSupabaseClient } from "./lib/supabaseClient.ts";
+import { getRealMonthToDateSpendUsd } from "./lib/harvest.ts";
 
 const ACTORS_PATH = new URL("../apify/actors.json", import.meta.url);
 const SEED_QUERIES_PATH = new URL("../discovery/seed_queries.json", import.meta.url);
@@ -157,14 +158,40 @@ function parseArgs() {
  * Prints an estimated cost and returns whether the caller may proceed.
  * Every stage that calls Apify goes through this -- no stage calls Apify
  * without printing a number first, and none proceeds without --confirm.
+ *
+ * It also checks REAL month-to-date spend against the cap, which it did not
+ * used to. For a long time --confirm was the only guard here, and that was
+ * defensible while a person was reading the estimate before typing it. Once
+ * discovery runs on a schedule, --confirm is just a flag in a YAML file and
+ * guards nothing -- so the same real-spend check the harvest has always had
+ * now covers the most expensive stages in the pipeline too.
+ *
+ * Over cap it SKIPS rather than fails: a sweep that cannot afford to run is
+ * not an error, and a red cross every month would train everyone to ignore
+ * the notification.
  */
-function costGate(stageName: string, estimateUsd: number, confirmed: boolean): boolean {
+async function costGate(
+  stageName: string,
+  estimateUsd: number,
+  confirmed: boolean,
+  apifyToken: string
+): Promise<boolean> {
   console.log(`\n[${stageName}] Estimated cost: $${estimateUsd.toFixed(4)}`);
   if (!confirmed) {
     console.log(`[${stageName}] Not confirmed -- pass --confirm to actually run this stage. Stopping here.`);
     return false;
   }
-  console.log(`[${stageName}] --confirm passed, proceeding.`);
+
+  const cap = config.MONTHLY_APIFY_SPEND_CAP_USD;
+  const spent = await getRealMonthToDateSpendUsd(apifyToken);
+  if (spent + estimateUsd > cap) {
+    console.log(
+      `[${stageName}] SKIPPED: real spend $${spent.toFixed(2)} + estimated $${estimateUsd.toFixed(2)} would exceed the $${cap} cap.`
+    );
+    return false;
+  }
+
+  console.log(`[${stageName}] --confirm passed, spend $${spent.toFixed(2)} of $${cap}. Proceeding.`);
   return true;
 }
 
@@ -182,7 +209,7 @@ async function stageSearch(apifyToken: string, limit: Market | undefined, confir
   // org account's plan tier -- see config.ts's ESTIMATED_COST_PER_*_USD
   // comment for how this was confirmed).
   const estimateUsd = Math.max(0.5, estimatedResults * 0.003 + 0.001);
-  if (!costGate("search", estimateUsd, confirmed)) return;
+  if (!(await costGate("search", estimateUsd, confirmed, apifyToken))) return;
 
   const supabase = getSupabaseClient();
 
@@ -298,7 +325,7 @@ async function stageProfile(apifyToken: string, confirmed: boolean) {
     `  (base profile, 1 result/candidate: $${baseProfileUsd.toFixed(4)}; ` +
       `+${PROFILE_RESULTS_PER_PAGE - 1} extra results/candidate for --classify captions: $${classifyCaptionsUsd.toFixed(4)})`
   );
-  if (!costGate("profile", estimateUsd, confirmed)) return;
+  if (!(await costGate("profile", estimateUsd, confirmed, apifyToken))) return;
 
   // Platform-aware: discovery now produces Instagram candidates as well as
   // TikTok ones (see discover_instagram.ts), and they need different
@@ -639,7 +666,7 @@ async function stageGate(apifyToken: string, limit: Market | undefined, confirme
   const ttResults = pending.filter((p) => (p.platform ?? "tiktok") === "tiktok").length * config.DISCOVERY_GATE_MAX_POSTS_PER_CANDIDATE;
   const igResults = pending.filter((p) => p.platform === "instagram").length * config.DISCOVERY_GATE_MAX_POSTS_PER_CANDIDATE;
   const estimateUsd = Math.max(0.5, ttResults * 0.003 + igResults * 0.0023 + 0.001);
-  if (!costGate("gate", estimateUsd, confirmed)) return;
+  if (!(await costGate("gate", estimateUsd, confirmed, apifyToken))) return;
 
   // Platform-split: different actor, different field names, and for
   // Instagram a real distinction TikTok doesn't have -- only Video posts
