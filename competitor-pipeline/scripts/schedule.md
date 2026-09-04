@@ -16,9 +16,22 @@ mid-flight. That is exactly how spend reached $29.07 against a $29 cap on
 
 | Tier | Cadence | Trigger | Runs |
 |---|---|---|---|
-| T1 | Weekly | e.g. Monday 06:00 AEST | Not wired to this scheduler -- stays manual (see note below) |
-| T2 | Fortnightly | Same day, every 2nd week | `npm run scheduled-harvest -- --tier T2` |
-| T3 | Monthly | 1st of the month | `npm run scheduled-harvest -- --tier T3` |
+| T1 | Weekly | -- | Not wired to this scheduler -- stays manual (see note below) |
+| T2 | Weekly | Sunday 19:00 UTC | `npm run scheduled-harvest -- --tier T2` |
+| T3 | Weekly | Sunday 20:00 UTC | `npm run scheduled-harvest -- --tier T3` |
+
+Changed from T2-fortnightly / T3-monthly to weekly on 2026-09-04, so that
+Monday morning always opens on data collected the night before. Sunday
+19:00 and 20:00 UTC are Monday 05:00 and 06:00 in Melbourne (an hour later
+under daylight saving), so both have finished before anyone looks.
+
+Weekly is affordable because harvests are incremental: a T2 run one day
+after the previous one returned 17 new post rows for $0.18, against a $1.84
+estimate. The estimate prices a full pull; the watermark means most runs are
+nowhere near it. What weekly does raise is the floor -- the TikTok actor
+charges a $0.50 per-run minimum whether it finds anything or not, so the
+realistic cost is roughly $3-6/month rather than the ~$5 of the old
+cadence.
 
 T1 is exempt from scoring (`SCOREABLE_TIERS` in `config.ts` is `["T2","T3"]`
 only) and was deliberately left off this scheduler -- see Prompt 4 Step 3.

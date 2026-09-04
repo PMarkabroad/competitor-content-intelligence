@@ -3,23 +3,24 @@
 # has existed and been verified since 2026-08-26; only the trigger was
 # missing.
 #
-# Cadence follows scripts/schedule.md: T2 fortnightly, T3 monthly. T1 is
-# deliberately absent -- it is exempt from scoring and stays manual.
+# Weekly, every Sunday, so Monday morning always opens on fresh data.
+# T1 is deliberately absent -- it is exempt from scoring and stays manual.
 #
-# Times are UTC (GitHub cron has no timezone). 19:00 UTC is early morning
-# in Melbourne, so a run lands before anyone looks at the dashboard.
+# Times are UTC (GitHub cron has no timezone). Sunday 19:00 UTC is Monday
+# 05:00 in Melbourne (06:00 during daylight saving), so both runs have
+# finished before anyone opens the dashboard on Monday.
 name: Scheduled harvest
 
 on:
   schedule:
-    # T2 -- 1st and 15th. GitHub cron cannot express "every two weeks", and
-    # twice a month is the honest approximation of a fortnightly cadence.
-    - cron: "0 19 1,15 * *"
-    # T3 -- monthly, on the 2nd rather than the 1st so it never collides
-    # with a T2 run. Two harvests in the same minute would each read the
-    # same month-to-date spend and each believe the full remaining budget
-    # was theirs.
-    - cron: "0 19 2 * *"
+    # T2 -- every Sunday evening UTC.
+    - cron: "0 19 * * 0"
+    # T3 -- an hour later, same night. Staggered rather than simultaneous
+    # for two reasons: two harvests starting in the same minute would each
+    # read the same month-to-date spend and each believe the whole
+    # remaining budget was theirs; and the tier is read from which cron
+    # fired, which needs the two expressions to differ.
+    - cron: "0 20 * * 0"
   workflow_dispatch:
     inputs:
       tier:
@@ -60,7 +61,7 @@ jobs:
         run: |
           if [ -n "${{ inputs.tier }}" ]; then
             echo "value=${{ inputs.tier }}" >> "$GITHUB_OUTPUT"
-          elif [ "${{ github.event.schedule }}" = "0 19 2 * *" ]; then
+          elif [ "${{ github.event.schedule }}" = "0 20 * * 0" ]; then
             echo "value=T3" >> "$GITHUB_OUTPUT"
           else
             echo "value=T2" >> "$GITHUB_OUTPUT"
