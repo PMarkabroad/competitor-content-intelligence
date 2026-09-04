@@ -1,48 +1,53 @@
-# Runs the harvest on a timer so it no longer depends on anyone's laptop
-# being awake. The runner (competitor-pipeline/scripts/scheduled_harvest.ts)
-# has existed and been verified since 2026-08-26; only the trigger was
-# missing.
+# The whole pipeline on a timer, so Monday opens on new competitor data AND
+# new hooks and posts made from it -- not just fresh rows.
 #
-# Weekly, every Sunday, so Monday morning always opens on fresh data.
-# T1 is deliberately absent -- it is exempt from scoring and stays manual.
+# Three runs every Sunday, staggered so each starts after the last has
+# finished:
 #
-# Times are UTC (GitHub cron has no timezone). Sunday 19:00 UTC is Monday
-# 05:00 in Melbourne (06:00 during daylight saving), so both runs have
-# finished before anyone opens the dashboard on Monday.
+#   19:00 UTC  harvest T2   32 TikTok + 6 Instagram
+#   20:00 UTC  harvest T3   19 Instagram
+#   21:00 UTC  content      transcribe -> hooks -> ready-made posts
+#
+# Sunday 21:00 UTC is Monday 07:00 in Melbourne (08:00 under daylight
+# saving), so everything has landed before anyone opens the dashboard.
+#
+# T1 is deliberately absent -- it is exempt from scoring, so an automatic
+# run would spend money producing nothing.
 name: Scheduled harvest
 
 on:
   schedule:
-    # T2 -- every Sunday evening UTC.
-    - cron: "0 19 * * 0"
-    # T3 -- an hour later, same night. Staggered rather than simultaneous
-    # for two reasons: two harvests starting in the same minute would each
-    # read the same month-to-date spend and each believe the whole
-    # remaining budget was theirs; and the tier is read from which cron
-    # fired, which needs the two expressions to differ.
-    - cron: "0 20 * * 0"
+    - cron: "0 19 * * 0" # T2 harvest
+    - cron: "0 20 * * 0" # T3 harvest
+    - cron: "0 21 * * 0" # content chain
   workflow_dispatch:
     inputs:
-      tier:
-        description: "Tier to harvest"
+      mode:
+        description: "What to run"
         required: true
-        default: "T2"
+        default: "content"
         type: choice
-        options: ["T2", "T3"]
+        options: ["T2", "T3", "content"]
 
-# One harvest at a time. Overlapping runs would double-spend against a cap
-# check that cannot see the other run in flight.
+# One at a time. Overlapping runs would double-spend against a cap check
+# that cannot see the other run in flight, and the content chain assumes
+# the harvests before it have finished.
 concurrency:
   group: scheduled-harvest
   cancel-in-progress: false
 
 jobs:
-  harvest:
+  run:
     runs-on: ubuntu-latest
-    timeout-minutes: 90
+    timeout-minutes: 180
     defaults:
       run:
         working-directory: competitor-pipeline
+    env:
+      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+      SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+      APIFY_TOKEN: ${{ secrets.APIFY_TOKEN }}
+      ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
     steps:
       - uses: actions/checkout@v4
 
@@ -54,34 +59,72 @@ jobs:
 
       - run: npm ci
 
-      # Which tier this run is for. A schedule fires with no inputs, so the
-      # cron expression that triggered it is what decides.
-      - name: Resolve tier
-        id: tier
+      # A scheduled run carries no inputs, so the cron expression that fired
+      # is what decides which mode this is.
+      - name: Resolve mode
+        id: mode
         run: |
-          if [ -n "${{ inputs.tier }}" ]; then
-            echo "value=${{ inputs.tier }}" >> "$GITHUB_OUTPUT"
+          if [ -n "${{ inputs.mode }}" ]; then
+            echo "value=${{ inputs.mode }}" >> "$GITHUB_OUTPUT"
+          elif [ "${{ github.event.schedule }}" = "0 19 * * 0" ]; then
+            echo "value=T2" >> "$GITHUB_OUTPUT"
           elif [ "${{ github.event.schedule }}" = "0 20 * * 0" ]; then
             echo "value=T3" >> "$GITHUB_OUTPUT"
           else
-            echo "value=T2" >> "$GITHUB_OUTPUT"
+            echo "value=content" >> "$GITHUB_OUTPUT"
           fi
 
       - name: Harvest
-        env:
-          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
-          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
-          APIFY_TOKEN: ${{ secrets.APIFY_TOKEN }}
-        run: npm run scheduled-harvest -- --tier ${{ steps.tier.outputs.value }}
+        if: steps.mode.outputs.value != 'content'
+        run: npm run scheduled-harvest -- --tier ${{ steps.mode.outputs.value }}
 
-      # Kept whether the harvest passed or was skipped for budget, because
-      # "skipped on cap" exits 0 by design and the log is the only place
-      # that says so.
+      # --- content chain -------------------------------------------------
+      # Each step continues on error. A failure here should cost one stage,
+      # not the whole night: if transcription dies, the hooks that already
+      # have transcripts should still get tagged, and posts should still be
+      # written from the hooks that already exist.
+
+      # Instagram only. TikTok speech-to-text was measured returning EMPTY
+      # on every subtitle-less video while still billing, so it is not
+      # retried. Bounded by --limit so a week with an unusual number of
+      # outliers cannot quietly drain the Apify budget; the spend guard
+      # inside the script is the other half of that.
+      - name: Transcribe new outliers
+        if: steps.mode.outputs.value == 'content'
+        continue-on-error: true
+        run: npm run transcribe-outliers -- --instagram --limit=25
+
+      # Turns transcripts (and short TikToks, from their captions) into hook
+      # rows. Filters job listings, visa/nationality content and non-English
+      # before spending a model call. Anthropic cost only.
+      - name: Draft hook tags
+        if: steps.mode.outputs.value == 'content'
+        continue-on-error: true
+        run: npm run draft-hook-tags
+
+      # Eight posts a week, each written out for all nine channels -- the
+      # count is capped deliberately. Anthropic has no spend ceiling the way
+      # Apify does, and an unbounded weekly generator would pile up drafts
+      # faster than anyone can publish them. generate-from-analysis chains
+      # into generate-formats itself.
+      - name: Generate ready-made posts
+        if: steps.mode.outputs.value == 'content'
+        continue-on-error: true
+        run: npm run generate-from-analysis -- --count=8
+
+      # Catches any draft whose chained format call failed above.
+      - name: Backfill missing channel versions
+        if: steps.mode.outputs.value == 'content'
+        continue-on-error: true
+        run: npm run generate-formats
+
+      # Kept whether the run passed, failed or was skipped for budget --
+      # a budget skip exits 0 by design, and the log is the only record.
       - name: Upload run log
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: harvest-${{ steps.tier.outputs.value }}-${{ github.run_id }}
+          name: run-${{ steps.mode.outputs.value }}-${{ github.run_id }}
           path: competitor-pipeline/logs/
           if-no-files-found: ignore
           retention-days: 30

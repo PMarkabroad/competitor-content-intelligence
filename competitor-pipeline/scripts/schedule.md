@@ -14,11 +14,24 @@ mid-flight. That is exactly how spend reached $29.07 against a $29 cap on
 
 ## Harvest cadence, by tier
 
-| Tier | Cadence | Trigger | Runs |
-|---|---|---|---|
-| T1 | Weekly | -- | Not wired to this scheduler -- stays manual (see note below) |
-| T2 | Weekly | Sunday 19:00 UTC | `npm run scheduled-harvest -- --tier T2` |
-| T3 | Weekly | Sunday 20:00 UTC | `npm run scheduled-harvest -- --tier T3` |
+| Stage | Trigger | Runs |
+|---|---|---|
+| T1 | -- | Not wired to this scheduler -- stays manual (see note below) |
+| T2 harvest | Sunday 19:00 UTC | `npm run scheduled-harvest -- --tier T2` |
+| T3 harvest | Sunday 20:00 UTC | `npm run scheduled-harvest -- --tier T3` |
+| Content | Sunday 21:00 UTC | `transcribe-outliers --instagram --limit=25`, then `draft-hook-tags`, then `generate-from-analysis --count=8` (which chains into `generate-formats`) |
+
+The content chain was added 2026-09-04. Before it, the scheduler collected
+rows and stopped: Monday brought fresh competitor posts but no new hooks and
+nothing to publish, which is most of the point. Every step runs with
+continue-on-error so one failure costs a stage rather than the night --
+if transcription dies, hooks that already have transcripts still get tagged.
+
+Two caps are deliberate. `--limit=25` on transcription bounds Apify spend on
+a week with an unusual number of outliers; the script's own spend guard is
+the other half. `--count=8` on generation exists because Anthropic has no
+spend ceiling the way Apify does, and an unbounded weekly generator would
+pile up drafts faster than anyone can publish them.
 
 Changed from T2-fortnightly / T3-monthly to weekly on 2026-09-04, so that
 Monday morning always opens on data collected the night before. Sunday
