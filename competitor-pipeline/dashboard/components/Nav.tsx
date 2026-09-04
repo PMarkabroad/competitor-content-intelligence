@@ -40,6 +40,7 @@ const PRIMARY_LINKS: { href: string; label: string }[] = [
 //                    weight only while the funnel is drained, which it is.
 // All three still work if you navigate to them directly.
 const MORE_LINKS: { href: string; label: string }[] = [
+  { href: "/hooks/annotate", label: "Why these worked" },
   { href: "/reports", label: "Monthly reports" },
   { href: "/status", label: "Status" },
   { href: "/data", label: "Raw tables" },
