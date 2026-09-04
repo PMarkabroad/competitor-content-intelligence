@@ -52,13 +52,11 @@ function Stage({
   label,
   href,
   emphasis,
-  split,
 }: {
   value: number;
   label: string;
   href?: string;
   emphasis?: boolean;
-  split?: { ig: number; tt: number } | null;
 }) {
   const body = (
     <>
@@ -70,16 +68,6 @@ function Stage({
         {formatNumber(value)}
       </span>
       <span className="mt-2 block text-[11px] leading-tight text-faint">{label}</span>
-      {/* Every stage is fed by both platforms and the mix is not obvious
-          from the total -- 173 transcripts is 76 Instagram and 97 TikTok,
-          which are very different stories about where the pipeline is
-          actually working. Shown per card rather than as one footnote so
-          the split is readable stage by stage. */}
-      {split && (
-        <span className="mt-1.5 block text-[10px] leading-tight text-dim tabular-nums">
-          IG {formatNumber(split.ig)} · TT {formatNumber(split.tt)}
-        </span>
-      )}
     </>
   );
   return (
@@ -100,6 +88,67 @@ function Stage({
 // many ACCOUNTS survive screening, then 1,250 -> 66 -> 66 -> 50 is what
 // their CONTENT turns into. Chained on one line, the jump from 39 to 1,250
 // reads as a mistake or as noise.
+// Instagram and TikTok as their own rows rather than one blended total.
+// The totals above answer "how big is the pipeline"; this answers "which
+// platform is actually producing", which is a different question and the
+// one that decides where the next account slot goes. Per-account rates are
+// left out on purpose -- the two platforms were onboarded months apart, so
+// dividing by account count would flatter whichever one has been running
+// longer rather than saying anything about the platform.
+function PlatformRows({
+  stages,
+}: {
+  stages: { label: string; ig: number; tt: number; href?: string }[];
+}) {
+  const row = (name: string, key: "ig" | "tt") => (
+    <tr className="border-t border-border">
+      <th scope="row" className="whitespace-nowrap py-2.5 pl-4 pr-6 text-left text-[13px] font-medium text-text">
+        {name}
+      </th>
+      {stages.map((s) => (
+        <td key={s.label} className="num whitespace-nowrap px-3 py-2.5 text-right text-[13px] tabular-nums text-text">
+          {formatNumber(s[key])}
+        </td>
+      ))}
+    </tr>
+  );
+  return (
+    <div>
+      <h2 className="mb-2 text-[11px] font-medium text-faint">By platform</h2>
+      {/* Scrolls inside itself on a narrow screen rather than pushing the
+          page sideways. */}
+      <div className="panel overflow-x-auto">
+        <table className="w-full border-collapse">
+          <thead>
+            <tr>
+              <th className="py-2 pl-4 pr-6" />
+              {stages.map((s) => (
+                <th
+                  key={s.label}
+                  scope="col"
+                  className="whitespace-nowrap px-3 py-2 text-right text-[11px] font-normal text-faint"
+                >
+                  {s.href ? (
+                    <Link href={s.href} className="transition-opacity hover:opacity-70">
+                      {s.label}
+                    </Link>
+                  ) : (
+                    s.label
+                  )}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {row("Instagram", "ig")}
+            {row("TikTok", "tt")}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
 function Pipeline({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <div>
@@ -236,18 +285,18 @@ export default async function HomePage() {
       {/* ---- the two pipelines ---- */}
       <section className="mb-10 grid grid-cols-1 gap-5 xl:grid-cols-[3fr_4fr]">
         <Pipeline title="Accounts">
-          <Stage value={screened} label="screened" split={{ ig: screenedIg, tt: screenedTt }} />
-          <Stage value={tracked} label="tracked" split={{ ig: trackedIg, tt: trackedTt }} />
-          <Stage value={activeCount} label="active now" href="/competitors" split={{ ig: activeIg, tt: activeTt }} />
+          <Stage value={screened} label="screened" />
+          <Stage value={tracked} label="tracked" />
+          <Stage value={activeCount} label="active now" href="/competitors" />
         </Pipeline>
 
         <Pipeline title="What their content becomes">
-          <Stage value={posts} label="posts collected" split={{ ig: postsIg, tt: postsTt }} />
+          <Stage value={posts} label="posts collected" />
           {/* Not linked: /transcripts is off the nav, and a raw transcript
               list isn't somewhere to send anyone. The count still matters
               as a pipeline stage. */}
-          <Stage value={transcripts} label="transcribed" split={{ ig: trIg, tt: trTt }} />
-          <Stage value={hookCount} label="hooks tagged" href="/hooks" split={{ ig: hooksIg, tt: hooksTt }} />
+          <Stage value={transcripts} label="transcribed" />
+          <Stage value={hookCount} label="hooks tagged" href="/hooks" />
           {/* No split: analysis-derived drafts are built from BOTH platforms'
               hooks at once (competitor_name = "Cross-competitor analysis",
               source_post_id null), so attributing one to a platform would
@@ -256,7 +305,20 @@ export default async function HomePage() {
         </Pipeline>
       </section>
 
-      <p className="mb-10 -mt-6 text-xs text-dim">
+      <section className="mb-6 -mt-6">
+        <PlatformRows
+          stages={[
+            { label: "screened", ig: screenedIg, tt: screenedTt },
+            { label: "tracked", ig: trackedIg, tt: trackedTt },
+            { label: "active now", ig: activeIg, tt: activeTt, href: "/competitors" },
+            { label: "posts collected", ig: postsIg, tt: postsTt },
+            { label: "transcribed", ig: trIg, tt: trTt },
+            { label: "hooks tagged", ig: hooksIg, tt: hooksTt, href: "/hooks" },
+          ]}
+        />
+      </section>
+
+      <p className="mb-10 text-xs text-dim">
         {Object.entries(byMarket)
           .sort((a, b) => b[1] - a[1])
           .map(([m, n]) => `${m} ${n}`)
