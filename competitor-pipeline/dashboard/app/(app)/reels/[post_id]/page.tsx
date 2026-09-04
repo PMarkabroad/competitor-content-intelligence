@@ -42,7 +42,7 @@ export default async function ReelDetailPage({ params }: { params: Promise<{ pos
   const thumbnailUrl = deriveThumbnailUrl(post.thumbnail_url, post.raw);
 
   return (
-    <div className="p-4">
+    <div className="p-3 sm:p-4">
       <div className="mb-4 grid grid-cols-3 gap-4">
         <div className="panel overflow-hidden">
           {thumbnailUrl ? (

@@ -221,7 +221,7 @@ export default async function ContentIdeasPage() {
   }
 
   return (
-    <div className="p-4">
+    <div className="p-3 sm:p-4">
       <h1 className="mb-1 text-sm font-semibold text-text">Content ideas</h1>
       <p className="mb-6 text-xs text-dim">Top 5 per market, ranked by outlier score. Tagged hooks and raw signal both included.</p>
 

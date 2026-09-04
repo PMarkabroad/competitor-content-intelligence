@@ -78,7 +78,7 @@ export default async function CompetitorDetailPage({
     .map((p) => ({ label: formatDate(p.posted_at), value: p.views as number }));
 
   return (
-    <div className="p-4">
+    <div className="p-3 sm:p-4">
       <div className="mb-4">
         <h1 className="text-sm font-semibold text-text">
           {competitor.name} <span className="font-normal text-dim">@{competitor.handle}</span>

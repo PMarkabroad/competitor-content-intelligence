@@ -23,7 +23,7 @@ export default async function ReportsPage() {
   const rows = reports ?? [];
 
   return (
-    <div className="p-4">
+    <div className="p-3 sm:p-4">
       <h1 className="mb-1 text-sm font-semibold text-text">Reports</h1>
       <p className="mb-4 text-xs text-dim">{rows.length} report(s), newest first.</p>
 

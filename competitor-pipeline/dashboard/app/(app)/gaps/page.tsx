@@ -50,7 +50,7 @@ export default async function GapsPage() {
     .sort((a, b) => b.avgScore / (b.competitorCount || 1) - a.avgScore / (a.competitorCount || 1));
 
   return (
-    <div className="p-4">
+    <div className="p-3 sm:p-4">
       <h1 className="mb-4 text-sm font-semibold text-text">High demand, low competition</h1>
       <div className="overflow-x-auto panel">
         <table className="w-full border-collapse text-left text-xs">

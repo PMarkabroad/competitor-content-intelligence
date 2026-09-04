@@ -50,7 +50,7 @@ export default async function OutliersPage() {
   const transcribedPostIds = new Set((transcripts ?? []).map((t) => t.post_id));
 
   return (
-    <div className="p-4">
+    <div className="p-3 sm:p-4">
       <h1 className="mb-1 text-sm font-semibold text-text">Transcription queue</h1>
       <p className="mb-4 text-xs text-dim">
         {rows.length} outlier(s) waiting -- this is what would be spent on next.

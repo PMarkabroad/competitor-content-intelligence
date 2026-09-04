@@ -60,7 +60,7 @@ export default async function HooksPage({
   if (params.market) rows = rows.filter((r) => r.competitors?.market === params.market);
 
   return (
-    <div className="p-5">
+    <div className="p-3 sm:p-5">
       <div className="mb-5 flex flex-wrap items-baseline justify-between gap-3">
         <div>
           <h1 className="text-lg font-semibold tracking-tight text-text">Hook library</h1>

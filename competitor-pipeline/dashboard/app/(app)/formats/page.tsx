@@ -59,7 +59,7 @@ export default async function FormatsPage() {
     .sort((a, b) => b.count - a.count);
 
   return (
-    <div className="p-5">
+    <div className="p-3 sm:p-5">
       <header className="mb-6">
         <h1 className="text-lg font-semibold tracking-tight text-text">Formats they use</h1>
         <p className="mt-1 max-w-[70ch] text-xs leading-relaxed text-dim">

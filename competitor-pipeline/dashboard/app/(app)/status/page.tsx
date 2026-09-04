@@ -43,7 +43,7 @@ export default async function StatusPage() {
     spend !== null && MONTHLY_APIFY_SPEND_CAP_USD !== null ? Math.min(100, (spend / MONTHLY_APIFY_SPEND_CAP_USD) * 100) : null;
 
   return (
-    <div className="p-4">
+    <div className="p-3 sm:p-4">
       <h1 className="mb-4 text-sm font-semibold text-text">Pipeline health</h1>
 
       <div className="mb-4 grid grid-cols-3 gap-4">
@@ -95,7 +95,7 @@ export default async function StatusPage() {
         <h2 className="mb-2 text-xs font-semibold text-faint">
           Last harvest per active competitor {overdueRows.length > 0 && <span className="text-bad">({overdueRows.length} overdue)</span>}
         </h2>
-        <table className="w-full border-collapse text-left text-xs">
+        <div className="overflow-x-auto"><table className="w-full border-collapse text-left text-xs">
           <thead>
             <tr className="border-b border-border text-faint">
               <th className="px-2 py-1 font-medium">Handle</th>
@@ -124,7 +124,7 @@ export default async function StatusPage() {
               );
             })}
           </tbody>
-        </table>
+        </table></div>
       </div>
 
       {lowMedianRows.length > 0 && (

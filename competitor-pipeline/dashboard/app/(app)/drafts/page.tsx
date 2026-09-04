@@ -114,7 +114,7 @@ export default async function DraftsPage({
     key === "all" ? rows.length : all.filter((f) => f.platform === key).length;
 
   return (
-    <div className="p-4">
+    <div className="p-3 sm:p-4">
       <h1 className="mb-1 text-sm font-semibold text-text">Ready-made posts</h1>
       <p className="mb-4 text-xs text-faint">
         Every draft written out for each channel you publish on. Pick a platform to see just
@@ -148,8 +148,8 @@ export default async function DraftsPage({
         <div className="flex flex-col gap-3">
           {rows.map((d) => (
             <div key={d.draft_id} id={`draft-${d.draft_id}`} className="panel p-4">
-              <div className="mb-2 flex items-center justify-between">
-                <div className="flex items-center gap-2 text-[11px] text-faint">
+              <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+                <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] text-faint">
                   <span className="font-medium text-dim">{d.competitor_name}</span>
                   <Badge tone="neutral">{d.market}</Badge>
                   <span>{formatDateTime(d.created_at)}</span>

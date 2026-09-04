@@ -48,7 +48,7 @@ export default async function AnnotatePage({
   const rows = showAll ? all : all.slice(0, TOP_N);
 
   return (
-    <div className="p-5">
+    <div className="p-3 sm:p-5">
       <div className="mb-1 flex flex-wrap items-baseline justify-between gap-3">
         <h1 className="text-lg font-semibold tracking-tight text-text">Why these worked</h1>
         <span className="text-xs text-dim tabular-nums">

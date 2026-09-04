@@ -74,7 +74,7 @@ export default async function ReviewPage({
   const excludedCount = allRows.length - allRows.filter((r) => !EXCLUDED_CLASSIFICATIONS.includes(r.classification ?? "")).length;
 
   return (
-    <div className="p-4">
+    <div className="p-3 sm:p-4">
       <div className="mb-4 flex items-baseline justify-between">
         <div>
           <h1 className="text-sm font-semibold text-text">Shortlist review</h1>

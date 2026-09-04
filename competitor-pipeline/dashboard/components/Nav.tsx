@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
@@ -71,17 +71,56 @@ export function Nav() {
   const pathname = usePathname();
   const moreHasActive = MORE_LINKS.some((link) => isActive(pathname, link.href));
   const [moreOpen, setMoreOpen] = useState(moreHasActive);
+  // Phone drawer. On md and up the sidebar is always shown and this is
+  // ignored entirely.
+  const [drawerOpen, setDrawerOpen] = useState(false);
+
+  // Tapping a link navigates but does not unmount the nav, so without this
+  // the drawer stays open over the page you just asked for.
+  useEffect(() => {
+    setDrawerOpen(false);
+  }, [pathname]);
+
+  const current =
+    [...PRIMARY_LINKS, ...MORE_LINKS].find((l) => isActive(pathname, l.href))?.label ?? "Menu";
 
   return (
-    <nav className="flex h-full w-56 shrink-0 flex-col overflow-y-auto border-r border-border bg-surface">
-      <Link
-        href="/"
-        className="flex items-baseline gap-2 border-b border-border px-4 py-5 transition-colors hover:bg-surface-hover"
+    <>
+      {/* Phone header. The 224px sidebar took 57% of a 390px screen, which
+          left the content itself unreadable, so on a phone it collapses to
+          this bar and opens on demand. */}
+      <div className="flex shrink-0 items-center gap-3 border-b border-border bg-surface px-4 py-3 md:hidden">
+        <button
+          type="button"
+          onClick={() => setDrawerOpen((v) => !v)}
+          aria-expanded={drawerOpen}
+          aria-label={drawerOpen ? "Close menu" : "Open menu"}
+          // 44px minimum: below that a target is unreliable under a thumb.
+          className="-ml-2 flex h-11 w-11 items-center justify-center rounded-md text-dim transition-colors hover:bg-surface-hover hover:text-text"
+        >
+          <span aria-hidden className="text-lg leading-none">
+            {drawerOpen ? "✕" : "☰"}
+          </span>
+        </button>
+        <Link href="/" className="flex items-baseline gap-2">
+          <span className="text-[15px] font-semibold tracking-tight text-text">Ark</span>
+          <span className="text-[13px] text-faint">{current}</span>
+        </Link>
+      </div>
+
+      <nav
+        className={`${
+          drawerOpen ? "flex" : "hidden"
+        } w-full shrink-0 flex-col overflow-y-auto border-b border-border bg-surface md:flex md:h-full md:w-56 md:border-b-0 md:border-r`}
       >
-        <span className="text-[15px] font-semibold tracking-tight text-text">Ark</span>
-        <span className="text-[13px] text-faint">competitor intel</span>
-      </Link>
-      <div className="flex flex-col gap-1 p-3">
+        <Link
+          href="/"
+          className="hidden items-baseline gap-2 border-b border-border px-4 py-5 transition-colors hover:bg-surface-hover md:flex"
+        >
+          <span className="text-[15px] font-semibold tracking-tight text-text">Ark</span>
+          <span className="text-[13px] text-faint">competitor intel</span>
+        </Link>
+        <div className="flex flex-col gap-1 p-3">
         {PRIMARY_LINKS.map((link) => (
           <NavLink key={link.href} href={link.href} label={link.label} active={isActive(pathname, link.href)} />
         ))}
@@ -94,14 +133,15 @@ export function Nav() {
           More
           <span aria-hidden>{moreOpen ? "\u2212" : "+"}</span>
         </button>
-        {moreOpen && (
-          <div className="flex flex-col gap-1">
-            {MORE_LINKS.map((link) => (
-              <NavLink key={link.href} href={link.href} label={link.label} active={isActive(pathname, link.href)} />
-            ))}
-          </div>
-        )}
-      </div>
-    </nav>
+          {moreOpen && (
+            <div className="flex flex-col gap-1">
+              {MORE_LINKS.map((link) => (
+                <NavLink key={link.href} href={link.href} label={link.label} active={isActive(pathname, link.href)} />
+              ))}
+            </div>
+          )}
+        </div>
+      </nav>
+    </>
   );
 }

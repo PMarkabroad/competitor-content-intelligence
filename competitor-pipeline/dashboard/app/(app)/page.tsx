@@ -71,7 +71,7 @@ function Stage({
     </>
   );
   return (
-    <div className="flex-1 px-4 py-4 first:pl-5 last:pr-5">
+    <div className="flex-1 bg-surface px-4 py-4 sm:first:pl-5 sm:last:pr-5">
       {href ? (
         <Link href={href} className="block rounded transition-opacity hover:opacity-70">
           {body}
@@ -153,7 +153,9 @@ function Pipeline({ title, children }: { title: string; children: React.ReactNod
   return (
     <div>
       <h2 className="mb-2 text-[11px] font-medium text-faint">{title}</h2>
-      <div className="panel flex divide-x divide-border">{children}</div>
+      <div className="panel grid grid-cols-2 gap-px overflow-hidden bg-border sm:flex sm:gap-0 sm:divide-x sm:divide-border sm:bg-transparent">
+        {children}
+      </div>
     </div>
   );
 }
@@ -281,7 +283,7 @@ export default async function HomePage() {
     .limit(4);
 
   return (
-    <div className="p-5">
+    <div className="p-4 sm:p-5">
       {/* ---- the two pipelines ---- */}
       <section className="mb-10 grid grid-cols-1 gap-5 xl:grid-cols-[3fr_4fr]">
         <Pipeline title="Accounts">

@@ -28,7 +28,7 @@ export default async function TopicsPage() {
   const avg = (nums: number[]) => (nums.length > 0 ? nums.reduce((a, b) => a + b, 0) / nums.length : null);
 
   return (
-    <div className="p-4">
+    <div className="p-3 sm:p-4">
       <h1 className="mb-4 text-sm font-semibold text-text">Volume and performance by topic</h1>
       <div className="overflow-x-auto panel">
         <table className="w-full border-collapse text-left text-xs">

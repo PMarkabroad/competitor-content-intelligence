@@ -79,7 +79,7 @@ export default async function RecommendationsPage() {
     .sort((a, b) => b.avgScore / (b.competitorCount || 1) - a.avgScore / (a.competitorCount || 1))[0];
 
   return (
-    <div className="p-4">
+    <div className="p-3 sm:p-4">
       <h1 className="mb-4 text-sm font-semibold text-text">What to create next</h1>
 
       <div className="panel mb-4 p-5">

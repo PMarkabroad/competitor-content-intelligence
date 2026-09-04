@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { IBM_Plex_Sans, IBM_Plex_Mono } from "next/font/google";
 import "./globals.css";
 
@@ -21,6 +21,18 @@ const plexMono = IBM_Plex_Mono({
   variable: "--font-plex-mono",
   display: "swap",
 });
+
+// Without this, mobile browsers lay the page out at ~980px and then zoom
+// out to fit, which is why the dashboard read as tiny on a phone rather
+// than as a narrow layout. Next needs it as its own export; a <meta> tag
+// written by hand in the body would be moved or dropped.
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  // Not locked: pinch-zoom is the only way to read a dense score table on a
+  // small screen, and taking it away fails WCAG 1.4.4.
+  maximumScale: 5,
+};
 
 export const metadata: Metadata = {
   title: "Ark Competitor Intel",

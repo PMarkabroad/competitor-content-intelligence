@@ -46,12 +46,12 @@ export default async function TranscriptsPage() {
   const topBigrams = Array.from(bigramCounts.entries()).filter(([, n]) => n >= 3).sort((a, b) => b[1] - a[1]).slice(0, 15);
 
   return (
-    <div className="p-4">
+    <div className="p-3 sm:p-4">
       <h1 className="mb-4 text-sm font-semibold text-text">Transcript phrase mining</h1>
       <div className="grid grid-cols-2 gap-4">
         <div className="panel p-4">
           <h2 className="mb-2 text-xs font-semibold text-faint">Opening words</h2>
-          <table className="w-full text-left text-xs">
+          <div className="overflow-x-auto"><table className="w-full text-left text-xs">
             <tbody>
               {topOpeningWords.map(([word, n]) => (
                 <tr key={word} className="border-b border-border last:border-b-0">
@@ -60,7 +60,7 @@ export default async function TranscriptsPage() {
                 </tr>
               ))}
             </tbody>
-          </table>
+          </table></div>
         </div>
         <div className="panel p-4">
           <h2 className="mb-2 text-xs font-semibold text-faint">Recurring phrases (3+ uses)</h2>

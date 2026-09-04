@@ -21,7 +21,7 @@ export default async function DataPage({
   if (error) throw new Error(`Failed to load ${config.name}: ${error.message}`);
 
   return (
-    <div className="p-4">
+    <div className="p-3 sm:p-4">
       <div className="mb-4 flex items-baseline justify-between">
         <div>
           <h1 className="text-sm font-semibold text-text">Data browser</h1>

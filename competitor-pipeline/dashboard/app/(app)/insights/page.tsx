@@ -196,7 +196,7 @@ export default async function InsightsPage() {
     .slice(0, 8);
 
   return (
-    <div className="p-5">
+    <div className="p-3 sm:p-5">
       <header className="mb-8">
         <h1 className="text-lg font-semibold tracking-tight text-text">Insights</h1>
         <p className="mt-1 max-w-[68ch] text-xs leading-relaxed text-dim">

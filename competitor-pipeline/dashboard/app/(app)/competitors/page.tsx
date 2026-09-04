@@ -96,7 +96,7 @@ export default async function CompetitorsPage({
   }
 
   return (
-    <div className="p-4">
+    <div className="p-3 sm:p-4">
       <div className="mb-4 flex items-baseline justify-between">
         <div>
           <h1 className="text-sm font-semibold text-text">Competitors</h1>

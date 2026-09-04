@@ -38,7 +38,7 @@ export default async function MarketsPage() {
   const excluded = byMarket.filter((m) => m.rows.length < MIN_ACCOUNTS_PER_MARKET && m.rows.length > 0);
 
   return (
-    <div className="p-4">
+    <div className="p-3 sm:p-4">
       <h1 className="mb-1 text-sm font-semibold text-text">Market comparison</h1>
       {excluded.length > 0 && (
         <p className="mb-4 text-xs text-faint">
