@@ -20,6 +20,10 @@
  * can see why it was suggested.
  *
  * Usage: npm run generate-from-analysis -- [--count=5] [--dry-run]
+ *
+ * Any --count above BATCH_SIZE is generated across several calls, each one
+ * told which hooks the earlier batches already used so the batches don't
+ * converge on the same few highest-scoring gaps.
  */
 
 import "dotenv/config";
@@ -66,6 +70,9 @@ function buildVoiceGuide(): string {
 
 async function main() {
   const count = Number(arg("count") ?? 5);
+  // Posts per API call. Five fits comfortably inside max_tokens alongside
+  // adaptive thinking; 25 did not.
+  const BATCH_SIZE = 5;
   const dryRun = process.argv.includes("--dry-run");
 
   const apiKey = process.env.ANTHROPIC_API_KEY;
@@ -199,27 +206,65 @@ HARD RULES, no exceptions:
 
 Output ONLY valid JSON, no markdown fences, no preamble:
 [{"market":"AU|US|CA","built_on":"one sentence naming the pattern and the gap subject this uses, citing the numbers from the evidence","hook":"the opening line, opening cold","script":"the full reel or carousel script, ready to read","caption":"a short Instagram caption at the Instagram register"}]
-Exactly ${count} objects.`;
+Exactly ${BATCH_SIZE} objects.`;
 
   const { default: Anthropic } = await import("@anthropic-ai/sdk");
   const anthropic = new Anthropic({ apiKey });
-  const message = await anthropic.messages.create({
-    model: "claude-opus-5",
-    max_tokens: 16000,
-    thinking: { type: "adaptive" },
-    system,
-    messages: [{ role: "user", content: evidence }],
-  });
 
-  const block = message.content.find((b) => b.type === "text");
-  if (!block || block.type !== "text") throw new Error("No text block returned.");
-  const jsonText = block.text.trim().replace(/^```(?:json)?\s*/i, "").replace(/```\s*$/i, "").trim();
+  // Generated in batches rather than one call. Asking for 25 posts at once
+  // overran max_tokens -- adaptive thinking draws from the same budget as
+  // the output -- and the reply came back as JSON truncated mid-string,
+  // which threw away every post in the batch, not just the last one.
+  // Batching caps the blast radius too: one bad batch now costs BATCH_SIZE
+  // posts instead of the whole run.
+  type Post = { market: string; built_on: string; hook: string; script: string; caption: string };
+  const posts: Post[] = [];
 
-  let posts: { market: string; built_on: string; hook: string; script: string; caption: string }[];
-  try {
-    posts = JSON.parse(jsonText);
-  } catch {
-    throw new Error(`Could not parse response as JSON: ${jsonText.slice(0, 400)}`);
+  for (let batch = 0; posts.length < count; batch++) {
+    const remaining = count - posts.length;
+    const askFor = Math.min(BATCH_SIZE, remaining);
+
+    // Each batch is a fresh call with no memory of the last one, so without
+    // this the model re-derives the same highest-scoring gaps every time and
+    // returns near-duplicates.
+    const avoid = posts.length
+      ? "\n\nAlready written -- do NOT repeat these angles or reopen with these lines:\n" +
+        posts.map((x) => `- ${x.hook}`).join("\n")
+      : "";
+
+    const stream = anthropic.messages.stream({
+      model: "claude-opus-5",
+      max_tokens: 16000,
+      thinking: { type: "adaptive" },
+      system: system.replace(`Exactly ${BATCH_SIZE} objects.`, `Exactly ${askFor} objects.`),
+      messages: [{ role: "user", content: evidence + avoid }],
+    });
+    const message = await stream.finalMessage();
+
+    const block = message.content.find((b) => b.type === "text");
+    if (!block || block.type !== "text") {
+      console.error(`  batch ${batch + 1}: no text block returned, skipping.`);
+      continue;
+    }
+    const jsonText = block.text.trim().replace(/^```(?:json)?\s*/i, "").replace(/```\s*$/i, "").trim();
+
+    let parsed: Post[];
+    try {
+      parsed = JSON.parse(jsonText);
+    } catch {
+      // A truncated batch loses only its own posts; the run carries on.
+      console.error(
+        `  batch ${batch + 1}: could not parse response as JSON (stop_reason=${message.stop_reason}), skipping. Starts: ${jsonText.slice(0, 120)}`
+      );
+      continue;
+    }
+    posts.push(...parsed);
+    console.log(`  batch ${batch + 1}: ${parsed.length} post(s) (${posts.length}/${count})`);
+
+    if (batch >= Math.ceil(count / BATCH_SIZE) + 2) {
+      console.error("  too many failed batches, stopping early.");
+      break;
+    }
   }
 
   let saved = 0;

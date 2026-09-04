@@ -52,11 +52,13 @@ function Stage({
   label,
   href,
   emphasis,
+  split,
 }: {
   value: number;
   label: string;
   href?: string;
   emphasis?: boolean;
+  split?: { ig: number; tt: number } | null;
 }) {
   const body = (
     <>
@@ -68,6 +70,16 @@ function Stage({
         {formatNumber(value)}
       </span>
       <span className="mt-2 block text-[11px] leading-tight text-faint">{label}</span>
+      {/* Every stage is fed by both platforms and the mix is not obvious
+          from the total -- 173 transcripts is 76 Instagram and 97 TikTok,
+          which are very different stories about where the pipeline is
+          actually working. Shown per card rather than as one footnote so
+          the split is readable stage by stage. */}
+      {split && (
+        <span className="mt-1.5 block text-[10px] leading-tight text-dim tabular-nums">
+          IG {formatNumber(split.ig)} · TT {formatNumber(split.tt)}
+        </span>
+      )}
     </>
   );
   return (
@@ -110,6 +122,60 @@ export default async function HomePage() {
     countRows(supabase, "v_outliers"),
   ]);
 
+  // --- platform split for every stage -------------------------------
+  // Counted server-side with head:true rather than fetching rows and
+  // grouping them in JS. PostgREST caps an unfiltered select at 1000 rows
+  // and competitor_posts is well past that, so a fetch-then-group would
+  // silently under-report whichever platform sorts later.
+  const { data: idRows } = await supabase.from("competitors").select("competitor_id, platform");
+  const igIds = (idRows ?? []).filter((r) => r.platform === "instagram").map((r) => r.competitor_id);
+  const ttIds = (idRows ?? []).filter((r) => r.platform === "tiktok").map((r) => r.competitor_id);
+
+  const countByCompetitor = async (table: string, ids: string[]) => {
+    if (ids.length === 0) return 0;
+    const { count } = await supabase
+      .from(table)
+      .select("*", { count: "exact", head: true })
+      .in("competitor_id", ids);
+    return count ?? 0;
+  };
+  // competitor_transcripts holds only post_id, so the platform has to come
+  // through competitor_posts. !inner makes it a real join rather than a
+  // left join that would count every transcript regardless of the filter.
+  const countTranscripts = async (ids: string[]) => {
+    if (ids.length === 0) return 0;
+    const { count } = await supabase
+      .from("competitor_transcripts")
+      .select("transcript_id, competitor_posts!inner(competitor_id)", { count: "exact", head: true })
+      .in("competitor_posts.competitor_id", ids);
+    return count ?? 0;
+  };
+  const countCandidates = async (platform: string) => {
+    const { count } = await supabase
+      .from("discovery_candidates")
+      .select("*", { count: "exact", head: true })
+      .eq("platform", platform);
+    return count ?? 0;
+  };
+  const countCompetitors = async (platform: string, activeOnly: boolean) => {
+    let q = supabase.from("competitors").select("*", { count: "exact", head: true }).eq("platform", platform);
+    if (activeOnly) q = q.eq("active", true).eq("handle_verified", true);
+    const { count } = await q;
+    return count ?? 0;
+  };
+
+  const [
+    screenedIg, screenedTt, trackedIg, trackedTt, activeIg, activeTt,
+    postsIg, postsTt, trIg, trTt, hooksIg, hooksTt,
+  ] = await Promise.all([
+    countCandidates("instagram"), countCandidates("tiktok"),
+    countCompetitors("instagram", false), countCompetitors("tiktok", false),
+    countCompetitors("instagram", true), countCompetitors("tiktok", true),
+    countByCompetitor("competitor_posts", igIds), countByCompetitor("competitor_posts", ttIds),
+    countTranscripts(igIds), countTranscripts(ttIds),
+    countByCompetitor("hook_library", igIds), countByCompetitor("hook_library", ttIds),
+  ]);
+
   const { count: activeCountRaw } = await supabase
     .from("competitors")
     .select("*", { count: "exact", head: true })
@@ -122,10 +188,8 @@ export default async function HomePage() {
     .select("market, platform, active, handle_verified");
   const activeComps = (compRows ?? []).filter((c) => c.active && c.handle_verified);
   const byMarket: Record<string, number> = {};
-  const byPlatform: Record<string, number> = {};
   for (const c of activeComps) {
     byMarket[c.market] = (byMarket[c.market] ?? 0) + 1;
-    byPlatform[c.platform] = (byPlatform[c.platform] ?? 0) + 1;
   }
 
   const { data: hookData } = await supabase
@@ -172,18 +236,22 @@ export default async function HomePage() {
       {/* ---- the two pipelines ---- */}
       <section className="mb-10 grid grid-cols-1 gap-5 xl:grid-cols-[3fr_4fr]">
         <Pipeline title="Accounts">
-          <Stage value={screened} label="screened" />
-          <Stage value={tracked} label="tracked" />
-          <Stage value={activeCount} label="active now" href="/competitors" />
+          <Stage value={screened} label="screened" split={{ ig: screenedIg, tt: screenedTt }} />
+          <Stage value={tracked} label="tracked" split={{ ig: trackedIg, tt: trackedTt }} />
+          <Stage value={activeCount} label="active now" href="/competitors" split={{ ig: activeIg, tt: activeTt }} />
         </Pipeline>
 
         <Pipeline title="What their content becomes">
-          <Stage value={posts} label="posts collected" />
+          <Stage value={posts} label="posts collected" split={{ ig: postsIg, tt: postsTt }} />
           {/* Not linked: /transcripts is off the nav, and a raw transcript
               list isn't somewhere to send anyone. The count still matters
               as a pipeline stage. */}
-          <Stage value={transcripts} label="transcribed" />
-          <Stage value={hookCount} label="hooks tagged" href="/hooks" />
+          <Stage value={transcripts} label="transcribed" split={{ ig: trIg, tt: trTt }} />
+          <Stage value={hookCount} label="hooks tagged" href="/hooks" split={{ ig: hooksIg, tt: hooksTt }} />
+          {/* No split: analysis-derived drafts are built from BOTH platforms'
+              hooks at once (competitor_name = "Cross-competitor analysis",
+              source_post_id null), so attributing one to a platform would
+              be inventing a fact. */}
           <Stage value={drafts} label="ready to post" href="/drafts" emphasis />
         </Pipeline>
       </section>
@@ -193,11 +261,6 @@ export default async function HomePage() {
           .sort((a, b) => b[1] - a[1])
           .map(([m, n]) => `${m} ${n}`)
           .join(" · ")}
-        {" · "}
-        {Object.entries(byPlatform)
-          .sort((a, b) => b[1] - a[1])
-          .map(([p, n]) => `${n} ${p}`)
-          .join(", ")}
         {pending > 0 && ` · ${pending} outlier${pending === 1 ? "" : "s"} waiting to be transcribed`}
       </p>
 
