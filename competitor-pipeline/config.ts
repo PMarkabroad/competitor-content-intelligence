@@ -298,13 +298,20 @@ export const config = {
   // reasoning further below, which was checked against the wrong
   // account (see the CORRECTION note above) -- kept only as a record of
   // that history, not current.
-  // Raised to 29 on 2026-09-03 at the user's request. NOTE: 29 IS the
-  // real Apify ceiling for this plan, so unlike the earlier 15 and 25
-  // this leaves NO buffer -- the guard now fires exactly where Apify
-  // starts billing overage rather than before it. Deliberate, but it
-  // means a single run that overshoots its estimate can spill past the
-  // included compute.
-  MONTHLY_APIFY_SPEND_CAP_USD: 29,
+  // Raised to 29 on 2026-09-03 at the user's request, matching the real
+  // Apify ceiling exactly and leaving NO buffer. That is precisely how
+  // spend reached $29.07 on 2026-09-04: the pre-flight guard compares
+  // real spend against an ESTIMATE and cannot stop a run that overshoots
+  // mid-flight, and Instagram transcription did overshoot -- it bills per
+  // minute of audio at ~$0.048/reel, roughly double the $0.022 a two-post
+  // sample had suggested.
+  //
+  // Raised to 38 on 2026-09-04 after the user increased the plan. The real
+  // ceiling is now $40 (GET /v2/users/me/limits -> limits.maxMonthlyUsageUsd,
+  // billing cycle 26th to 25th), so this deliberately keeps $2 back rather
+  // than sitting on the wall again: the guard's estimate has now been shown
+  // to under-read a real run, and the buffer is what absorbs that.
+  MONTHLY_APIFY_SPEND_CAP_USD: 38,
 
   /**
    * Per-item cost estimates used only for the spend-guard check, not

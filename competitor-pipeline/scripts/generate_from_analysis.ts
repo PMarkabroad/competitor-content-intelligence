@@ -19,7 +19,7 @@
  * source_caption carries the evidence the post was built on, so a human
  * can see why it was suggested.
  *
- * Usage: npm run generate-from-analysis -- [--count=5] [--dry-run]
+ * Usage: npm run generate-from-analysis -- [--count=5] [--market=US,CA] [--dry-run]
  *
  * Any --count above BATCH_SIZE is generated across several calls, each one
  * told which hooks the earlier batches already used so the batches don't
@@ -73,6 +73,19 @@ async function main() {
   // Posts per API call. Five fits comfortably inside max_tokens alongside
   // adaptive thinking; 25 did not.
   const BATCH_SIZE = 5;
+  // Which market(s) the batch may write for. Left open, the model picks the
+  // market itself and picks AU nearly every time -- a 25-post run came back
+  // 24 AU / 1 CA / 0 US, because the voice doc and proof bank are written
+  // in Australian specifics and that is the path of least resistance. It is
+  // not wrong about the evidence; it just never reaches the other two
+  // markets on its own. --market pins it.
+  const marketArg = (arg("market") ?? "").toUpperCase();
+  const markets = marketArg
+    ? marketArg.split(",").map((m) => m.trim()).filter((m) => ["AU", "US", "CA"].includes(m))
+    : [];
+  if (marketArg && markets.length === 0) {
+    throw new Error(`--market must be one or more of AU, US, CA (got "${marketArg}").`);
+  }
   const dryRun = process.argv.includes("--dry-run");
 
   const apiKey = process.env.ANTHROPIC_API_KEY;
@@ -206,7 +219,13 @@ HARD RULES, no exceptions:
 
 Output ONLY valid JSON, no markdown fences, no preamble:
 [{"market":"AU|US|CA","built_on":"one sentence naming the pattern and the gap subject this uses, citing the numbers from the evidence","hook":"the opening line, opening cold","script":"the full reel or carousel script, ready to read","caption":"a short Instagram caption at the Instagram register"}]
-Exactly ${BATCH_SIZE} objects.`;
+Exactly ${BATCH_SIZE} objects.${
+    markets.length
+      ? `
+
+MARKET IS FIXED for this batch: every object's "market" MUST be ${markets.join(" or ")}, and the script must be written for a reader in that market. Where the proof bank's figures are Australian, say so in the line rather than restating them as though they were local -- do not silently convert a salary band or a degree cost into another country's numbers, and do not invent that country's equivalents.`
+      : ""
+  }`;
 
   const { default: Anthropic } = await import("@anthropic-ai/sdk");
   const anthropic = new Anthropic({ apiKey });
