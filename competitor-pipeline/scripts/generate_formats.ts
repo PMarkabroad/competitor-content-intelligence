@@ -129,6 +129,53 @@ function arg(name: string): string | null {
   return f ? f.slice(name.length + 3) : null;
 }
 
+/**
+ * Parses the model's reply, repairing the one way it reliably breaks.
+ *
+ * Several formats here ask for multi-line bodies -- SLIDE 1: ... SLIDE 2:,
+ * FRAME 1: ... -- and the model writes those line breaks as REAL newlines
+ * inside the JSON string rather than as \n. That is invalid JSON, and it
+ * cost 3 of the first 4 failures on a 68-draft run: a whole draft's nine
+ * versions thrown away over a line break.
+ *
+ * Asking the prompt more firmly for escaped newlines does not fix it --
+ * the model is producing exactly the text that was asked for and only the
+ * transport is wrong -- so the newlines are escaped here instead. Only
+ * control characters INSIDE a string literal are touched; the JSON's own
+ * formatting between tokens is left alone.
+ */
+function parseVariants(raw: string): Variant[] {
+  try {
+    return JSON.parse(raw) as Variant[];
+  } catch {
+    let out = "";
+    let inString = false;
+    let escaped = false;
+    for (const ch of raw) {
+      if (escaped) {
+        out += ch;
+        escaped = false;
+        continue;
+      }
+      if (ch === "\\") {
+        out += ch;
+        escaped = true;
+        continue;
+      }
+      if (ch === '"') {
+        inString = !inString;
+        out += ch;
+        continue;
+      }
+      if (inString && ch === "\n") out += "\\n";
+      else if (inString && ch === "\r") out += "\\r";
+      else if (inString && ch === "\t") out += "\\t";
+      else out += ch;
+    }
+    return JSON.parse(out) as Variant[];
+  }
+}
+
 async function main() {
   const limitArg = arg("limit");
   const limit = limitArg ? Number(limitArg) : null;
@@ -224,7 +271,7 @@ ${specSheet}`;
       const block = msg.content.find((b) => b.type === "text");
       if (!block || block.type !== "text") throw new Error("no text block returned");
       const raw = block.text.trim().replace(/^```(?:json)?\s*/i, "").replace(/```\s*$/i, "").trim();
-      variants = JSON.parse(raw) as Variant[];
+      variants = parseVariants(raw);
     } catch (e) {
       console.error(`  [${i + 1}/${batch.length}] FAILED: ${(e as Error).message}`);
       failed++;
