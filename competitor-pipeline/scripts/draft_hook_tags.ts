@@ -40,6 +40,7 @@
 import "dotenv/config";
 import { readFileSync } from "node:fs";
 import { getSupabaseClient } from "./lib/supabaseClient.ts";
+import { nonEnglishReason } from "./lib/language.ts";
 
 const VOICE_DOC_PATH = new URL("../reference/arkabroad-voice.md", import.meta.url);
 const BUSINESS_DEF_PATH = new URL("../reference/business-definition.md", import.meta.url);
@@ -400,6 +401,19 @@ async function main() {
   candidates = candidates.filter((c) => !NATIONALITY_VISA.test(`${c.caption ?? ""} ${c.transcript.slice(0, 1200)}`));
   const skippedNationality = beforeNat - candidates.length;
 
+  // Non-English content never enters the library either. Ark publishes in
+  // English to a reader in Australia, so a Spanish carousel or a Korean
+  // punchline can never become an Ark post -- but it can still score, and
+  // one did: a 198x hook sitting third in the library was the single line
+  // "사랑합니다" attached to an English subject.
+  //
+  // Judged on the transcript rather than the caption. A creator posting in
+  // Spanish sometimes writes an English caption, and it is the spoken words
+  // that become the hook.
+  const beforeLang = candidates.length;
+  candidates = candidates.filter((c) => !nonEnglishReason(c.transcript || c.caption || ""));
+  const skippedLanguage = beforeLang - candidates.length;
+
   candidates.sort((a, b) => (b.outlier_score ?? 0) - (a.outlier_score ?? 0));
   if (limit) candidates = candidates.slice(0, limit);
 
@@ -407,6 +421,8 @@ async function main() {
     console.log(`Skipped ${skippedListings} job-listing post(s) -- vacancy read-outs carry no hook craft and Ark doesn't post job boards.`);
   }
   if (skippedNationality > 0) {
+  if (skippedLanguage > 0)
+    console.log(`Skipped ${skippedLanguage} non-English post(s) -- Ark publishes in English to a reader in Australia.`);
     console.log(`Skipped ${skippedNationality} nationality-ranking / visa post(s) -- Never-ships item 2 and the regulated-activity rule.`);
   }
   console.log(`Drafting hook tags for ${candidates.length} transcribed post(s) in batches of ${BATCH_SIZE}.`);
