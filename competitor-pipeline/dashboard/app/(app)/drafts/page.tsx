@@ -1,9 +1,10 @@
+import { Suspense } from "react";
 import Link from "next/link";
 import { getSupabaseServerClient } from "@/lib/supabase";
 import { Badge } from "@/components/Badge";
 import { formatNumber, formatVpf, formatDateTime } from "@/lib/format";
 import { DraftStatusActions } from "@/components/DraftStatusActions";
-import { ChannelVersions, type ChannelVersion } from "@/components/ChannelVersions";
+import type { ChannelVersion } from "@/components/ChannelVersions";
 import { CopyBody } from "@/components/CopyBody";
 
 export const dynamic = "force-dynamic";
@@ -96,40 +97,28 @@ export default async function DraftsPage({
         .eq("status", "dismissed"),
       // Just the platform column: enough for the tab counts, without
       // dragging every body along to compute a number.
-      supabase.from("draft_formats").select("platform"),
+      supabase.from("draft_formats").select("platform, draft_id"),
     ]);
 
   const rows = drafts ?? [];
 
-  // Bodies are large -- 576 versions come to ~417KB of text -- so only the
-  // ones actually about to be rendered are fetched. Pulling all of them and
-  // filtering in JS made /drafts the slowest page on the site: 4.7s, most
-  // of it transferring text that was then thrown away.
-  let formatQuery = supabase
-    .from("draft_formats")
-    .select("draft_id, platform, format, body, char_count, char_limit")
-    .in(
-      "draft_id",
-      rows.map((d) => d.draft_id)
-    );
-  if (active !== "all") formatQuery = formatQuery.eq("platform", active);
-  const { data: formatRows } = rows.length ? await formatQuery : { data: [] as FormatRow[] };
-
-  const all = (formatRows ?? []) as FormatRow[];
-
-  const byDraft = new Map<string, ChannelVersion[]>();
-  for (const f of all) {
-    if (!byDraft.has(f.draft_id)) byDraft.set(f.draft_id, []);
-    byDraft.get(f.draft_id)!.push(f);
-  }
-
   const hookByDraft = new Map(rows.map((d) => [d.draft_id, d.hook as string]));
-  // Counted from the platform-only query, so the tabs stay accurate even
-  // though `all` now holds just the active platform's rows.
+
+  // Counted over the drafts actually on this page. Counting every row in the
+  // table instead made the X tab read 70 while showing 30 -- the count was
+  // describing the database, not the page.
+  const visible = new Set(rows.map((d) => d.draft_id));
+  const visibleFormats = (platformCounts ?? []).filter((f) => visible.has(f.draft_id));
   const countFor = (key: string) =>
-    key === "all"
-      ? rows.length
-      : (platformCounts ?? []).filter((f) => f.platform === key).length;
+    key === "all" ? rows.length : visibleFormats.filter((f) => f.platform === key).length;
+
+  // Which platforms a given draft has versions for, so the all-posts view
+  // can link out without shipping any bodies.
+  const platformsByDraft = new Map<string, Set<string>>();
+  for (const f of visibleFormats) {
+    if (!platformsByDraft.has(f.draft_id)) platformsByDraft.set(f.draft_id, new Set());
+    platformsByDraft.get(f.draft_id)!.add(f.platform);
+  }
 
   return (
     <div className="p-3 sm:p-4">
@@ -186,15 +175,97 @@ export default async function DraftsPage({
               <p className="mb-1.5 text-sm font-medium text-text">{d.hook}</p>
               <p className="mb-1.5 whitespace-pre-wrap text-xs leading-relaxed text-dim">{d.script}</p>
               <p className="text-xs italic text-faint">Caption: {d.caption}</p>
-              <ChannelVersions versions={byDraft.get(d.draft_id) ?? []} />
+              <ChannelLinks platforms={platformsByDraft.get(d.draft_id) ?? new Set()} />
             </div>
           ))}
         </div>
       ) : (
-        <PlatformView rows={all} hookByDraft={hookByDraft} />
+        // Keyed on the platform so switching tabs actually suspends. A
+        // search-param change does not remount the route segment, so
+        // app/(app)/loading.tsx never fires here -- without this boundary
+        // the page simply sat for ~2s with no feedback, which is what
+        // "moving very slow" described.
+        <Suspense key={active} fallback={<PlatformSkeleton />}>
+          <PlatformBodies
+            platform={active}
+            draftIds={rows.map((d) => d.draft_id)}
+            hookByDraft={hookByDraft}
+          />
+        </Suspense>
       )}
     </div>
   );
+}
+
+const PLATFORM_LABEL: Record<string, string> = {
+  instagram: "Instagram",
+  linkedin: "LinkedIn",
+  facebook: "Facebook",
+  twitter: "X",
+};
+
+/**
+ * Replaces the nine embedded channel bodies that used to sit behind tabs on
+ * every card. Those bodies were the bulk of a 623KB page and duplicated the
+ * platform sections, which show the same text better. The card keeps the
+ * idea; the channels are one tap away.
+ */
+function ChannelLinks({ platforms }: { platforms: Set<string> }) {
+  if (platforms.size === 0) return null;
+  return (
+    <div className="mt-3 flex flex-wrap items-center gap-1.5 border-t border-border pt-2.5">
+      <span className="text-[10px] text-faint">Written for</span>
+      {["instagram", "linkedin", "facebook", "twitter"]
+        .filter((p) => platforms.has(p))
+        .map((p) => (
+          <Link
+            key={p}
+            href={`/drafts?platform=${p}`}
+            className="rounded border border-border px-1.5 py-0.5 text-[10px] text-dim transition-colors hover:text-text"
+          >
+            {PLATFORM_LABEL[p]}
+          </Link>
+        ))}
+    </div>
+  );
+}
+
+function PlatformSkeleton() {
+  return (
+    <div className="flex animate-pulse flex-col gap-3" aria-busy="true">
+      <span className="sr-only">Loading channel versions…</span>
+      {Array.from({ length: 4 }).map((_, i) => (
+        <div key={i} className="panel flex flex-col gap-2.5 p-4">
+          <div className="h-3 w-2/3 rounded bg-border" />
+          <div className="h-20 rounded bg-border/60" />
+        </div>
+      ))}
+    </div>
+  );
+}
+
+/**
+ * Fetches and renders one platform's bodies. Split out from the page so it
+ * can suspend on its own: the tab strip and counts paint straight away
+ * while this is still loading.
+ */
+async function PlatformBodies({
+  platform,
+  draftIds,
+  hookByDraft,
+}: {
+  platform: string;
+  draftIds: string[];
+  hookByDraft: Map<string, string>;
+}) {
+  if (draftIds.length === 0) return <PlatformView rows={[]} hookByDraft={hookByDraft} />;
+  const supabase = getSupabaseServerClient();
+  const { data } = await supabase
+    .from("draft_formats")
+    .select("draft_id, platform, format, body, char_count, char_limit")
+    .in("draft_id", draftIds)
+    .eq("platform", platform);
+  return <PlatformView rows={(data ?? []) as FormatRow[]} hookByDraft={hookByDraft} />;
 }
 
 function PlatformView({
