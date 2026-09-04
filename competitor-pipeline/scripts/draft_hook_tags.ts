@@ -29,6 +29,11 @@
  * shapes content strategy. The volume is ~60 items, so the cost difference
  * is immaterial and quality is the only thing that matters here.
  *
+ * Also tags SHORT TikTok outliers (<=15s) straight from their caption, with
+ * tagged_by='claude-code-draft-caption'. At that length the caption is the
+ * whole hook, so transcribing buys nothing. Instagram is excluded from this
+ * on purpose -- its captions are engagement bait, not the hook.
+ *
  * Usage: npm run draft-hook-tags -- [--limit=N] [--dry-run]
  */
 
@@ -72,6 +77,9 @@ interface Candidate {
   outlier_score: number | null;
   vpf: number | null;
   duration_seconds: number | null;
+  // Where the hook text came from. Recorded because the two are not equally
+  // trustworthy and a reader of the library needs to be able to tell.
+  source: "transcript" | "caption";
 }
 
 interface DraftTag {
@@ -153,7 +161,19 @@ One object per video, in the order given, with post_id copied exactly.`;
 }
 
 async function draftBatch(
-  anthropic: { messages: { create: (args: Record<string, unknown>) => Promise<{ content: { type: string; text?: string }[] }> } },
+  // Hand-written rather than imported: the SDK is dynamically imported at
+  // the call site so its types aren't in scope here. Narrow on purpose --
+  // it names only what this function uses.
+  anthropic: {
+    messages: {
+      stream: (args: Record<string, unknown>) => {
+        finalMessage: () => Promise<{
+          content: { type: string; text?: string }[];
+          stop_reason: string | null;
+        }>;
+      };
+    };
+  },
   voiceDoc: string,
   batch: Candidate[]
 ): Promise<DraftTag[]> {
@@ -169,16 +189,28 @@ transcript: ${sanitize(c.transcript.slice(0, 6000))}`
     )
     .join("\n\n");
 
-  const response = await anthropic.messages.create({
+  // Streamed, and with room to finish. Adaptive thinking draws from the
+  // same max_tokens budget as the output, so 8000 left four rich rows --
+  // each carrying narrative_structure, brand_fit_note and transplant_note
+  // -- competing with the thinking for space. Every run so far has lost
+  // exactly one batch to a reply truncated mid-string, which the parse then
+  // discarded whole.
+  const stream = anthropic.messages.stream({
     model: "claude-opus-5",
-    max_tokens: 8000,
+    max_tokens: 16000,
     thinking: { type: "adaptive" },
     system: buildSystemPrompt(voiceDoc),
     messages: [{ role: "user", content: userContent }],
   });
+  const response = await stream.finalMessage();
 
-  const textBlock = response.content.find((b) => b.type === "text");
+  const textBlock = response.content.find((b: { type: string; text?: string }) => b.type === "text");
   if (!textBlock?.text) throw new Error("Draft response had no text block.");
+  if (response.stop_reason === "max_tokens") {
+    throw new Error(
+      `Response hit max_tokens and is truncated -- batch discarded rather than half-parsed. Lower BATCH_SIZE (currently ${BATCH_SIZE}) if this recurs.`
+    );
+  }
 
   // Same defensive fence-stripping as discover.ts --classify: the prompt
   // says "no markdown fences" and models wrap the response anyway often
@@ -224,14 +256,59 @@ async function main() {
   if (hErr) throw new Error(`Failed to read hook_library: ${hErr.message}`);
   const taggedIds = new Set((tagged ?? []).map((h) => h.post_id));
 
-  const pendingIds = (transcripts ?? [])
+  const transcriptPendingIds = (transcripts ?? [])
     .filter((t) => !taggedIds.has(t.post_id) && (t.transcript ?? "").trim().length > 0)
     .map((t) => t.post_id);
+
+  // Short TikToks are taggable from their caption alone. On a 5-9 second
+  // video there is no room for a hook that isn't already in the caption --
+  // "A hiring manager can like you and still decide not to hire you" IS the
+  // whole video -- so transcribing one buys words you can already read.
+  // That is very likely why the paid speech-to-text run returned empty on
+  // every one of them.
+  //
+  // TikTok only, and short only. The equivalent does NOT hold on Instagram:
+  // sampled Instagram outlier captions were engagement bait ("i have so
+  // much new advice now"), with the real hook spoken in the reel. Widening
+  // this to Instagram or to longer videos would fill the library with
+  // captions pretending to be hooks.
+  const CAPTION_MAX_SECONDS = 15;
+  const transcribedIds = new Set((transcripts ?? []).map((t) => t.post_id));
+  const { data: outlierRows } = await supabase.from("v_outliers").select("post_id, competitor_id");
+  const { data: platformRows } = await supabase.from("competitors").select("competitor_id, platform");
+  const platformById = new Map((platformRows ?? []).map((c) => [c.competitor_id, c.platform as string]));
+
+  const shortCandidateIds = (outlierRows ?? [])
+    .filter((r) => !taggedIds.has(r.post_id) && !transcribedIds.has(r.post_id))
+    .filter((r) => platformById.get(r.competitor_id) === "tiktok")
+    .map((r) => r.post_id);
+
+  const { data: shortPosts } = shortCandidateIds.length
+    ? await supabase
+        .from("competitor_posts")
+        .select("post_id, duration_seconds, caption")
+        .in("post_id", shortCandidateIds)
+    : { data: [] as { post_id: string; duration_seconds: number | null; caption: string | null }[] };
+
+  const captionPendingIds = (shortPosts ?? [])
+    .filter(
+      (p) =>
+        (p.duration_seconds ?? 999) <= CAPTION_MAX_SECONDS &&
+        String(p.caption ?? "").trim().length >= 25
+    )
+    .map((p) => p.post_id);
+
+  const captionSourced = new Set(captionPendingIds);
+  const pendingIds = [...transcriptPendingIds, ...captionPendingIds];
 
   if (pendingIds.length === 0) {
     console.log("Every transcript already has a hook_library row. Nothing to draft.");
     return;
   }
+  console.log(
+    `${transcriptPendingIds.length} from transcripts, ${captionPendingIds.length} from captions ` +
+      `(TikTok <=${CAPTION_MAX_SECONDS}s, where the caption is the whole hook).`
+  );
 
   const { data: posts, error: pErr } = await supabase
     .from("competitor_posts")
@@ -281,7 +358,11 @@ async function main() {
       competitor_name: compById.get(p.competitor_id)?.name ?? "(unknown)",
       market: compById.get(p.competitor_id)?.market ?? "?",
       caption: p.caption,
-      transcript: transcriptByPost.get(p.post_id) ?? "",
+      // For a caption-sourced row the caption IS the spoken line, so it is
+      // passed as the transcript rather than left blank -- the model is
+      // being asked the same question either way.
+      transcript: transcriptByPost.get(p.post_id) ?? (captionSourced.has(p.post_id) ? String(p.caption ?? "") : ""),
+      source: captionSourced.has(p.post_id) ? "caption" : "transcript",
       outlier_score: outlierScore,
       vpf,
       duration_seconds: p.duration_seconds,
@@ -369,7 +450,9 @@ async function main() {
           vpf: c.vpf,
           duration_seconds: c.duration_seconds,
           why_it_performed: null, // human-written only, by standing rule
-          tagged_by: "claude-code-draft",
+          // Distinguishable from a transcript-derived row on sight: a
+          // caption-derived hook is the posted caption, not what was said.
+          tagged_by: c.source === "caption" ? "claude-code-draft-caption" : "claude-code-draft",
         };
 
         if (dryRun) {
