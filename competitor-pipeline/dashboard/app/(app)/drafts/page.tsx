@@ -2,6 +2,7 @@ import { getSupabaseServerClient } from "@/lib/supabase";
 import { Badge } from "@/components/Badge";
 import { formatNumber, formatVpf, formatDateTime } from "@/lib/format";
 import { DraftStatusActions } from "@/components/DraftStatusActions";
+import { ChannelVersions, type ChannelVersion } from "@/components/ChannelVersions";
 
 export const dynamic = "force-dynamic";
 
@@ -27,11 +28,27 @@ export default async function DraftsPage() {
 
   const rows = drafts ?? [];
 
+  // Channel versions for everything on this page, fetched in one query and
+  // grouped in memory rather than one query per card.
+  const { data: formatRows } = rows.length
+    ? await supabase
+        .from("draft_formats")
+        .select("draft_id, platform, format, body, char_count, char_limit")
+        .in("draft_id", rows.map((d) => d.draft_id))
+    : { data: [] as (ChannelVersion & { draft_id: string })[] };
+
+  const byDraft = new Map<string, ChannelVersion[]>();
+  for (const f of (formatRows ?? []) as (ChannelVersion & { draft_id: string })[]) {
+    if (!byDraft.has(f.draft_id)) byDraft.set(f.draft_id, []);
+    byDraft.get(f.draft_id)!.push(f);
+  }
+
   return (
     <div className="p-4">
       <h1 className="mb-1 text-sm font-semibold text-text">Ready-made posts</h1>
       <p className="mb-4 text-xs text-faint">
-        Every draft generated from a competitor post, newest first. Nothing here is auto-posted -- review before using.
+        Every draft generated from a competitor post, newest first, each one written out for every
+        channel you publish on. Nothing here is auto-posted -- review before using.
         {dismissedCount ? ` ${dismissedCount} dismissed draft${dismissedCount === 1 ? "" : "s"} hidden.` : ""}
       </p>
 
@@ -60,6 +77,7 @@ export default async function DraftsPage() {
               <p className="mb-1.5 text-sm font-medium text-text">{d.hook}</p>
               <p className="mb-1.5 whitespace-pre-wrap text-xs leading-relaxed text-dim">{d.script}</p>
               <p className="text-xs italic text-faint">Caption: {d.caption}</p>
+              <ChannelVersions versions={byDraft.get(d.draft_id) ?? []} />
               {d.source_caption && (
                 <p className="mt-2 border-t border-border pt-2 text-[11px] text-faint">
                   Source post caption: "{d.source_caption}"

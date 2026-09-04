@@ -28,7 +28,8 @@
     "purge-nationality": "tsx scripts/purge_nationality_content.ts",
     "discover-instagram": "tsx scripts/discover_instagram.ts",
     "export-instagram-candidates": "tsx scripts/export_instagram_candidates.ts",
-    "audit-relevance": "tsx scripts/audit_relevance.ts"
+    "audit-relevance": "tsx scripts/audit_relevance.ts",
+    "generate-formats": "tsx scripts/generate_formats.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.120.0",

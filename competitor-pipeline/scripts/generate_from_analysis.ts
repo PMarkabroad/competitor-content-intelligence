@@ -316,6 +316,24 @@ Exactly ${BATCH_SIZE} objects. Every object's "market" is "AU" -- Ark serves Aus
   }
 
   console.log(`\nSaved ${saved} analysis-derived post(s). They're on /drafts.`);
+
+  // Channel versions are generated here rather than left as a step someone
+  // has to remember. A draft with no LinkedIn or carousel version still has
+  // to be rewritten by hand, which is the work this pipeline exists to
+  // remove. Failure is reported, not thrown: the posts are already saved
+  // and are useful without their variants.
+  if (saved > 0) {
+    console.log("\nExpanding into channel versions...");
+    try {
+      const { execSync } = await import("node:child_process");
+      execSync("npm run generate-formats", {
+        stdio: "inherit",
+        cwd: new URL("..", import.meta.url).pathname.replace(/^\/([A-Za-z]:)/, "$1"),
+      });
+    } catch {
+      console.error("Channel versions failed -- the posts are saved. Run `npm run generate-formats` to retry.");
+    }
+  }
 }
 
 main().catch((err) => {
