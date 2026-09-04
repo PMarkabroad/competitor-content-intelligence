@@ -21,13 +21,52 @@ export const dynamic = "force-dynamic";
  * the by-idea view means opening 69 cards and clicking the same tab in
  * each.
  */
-const PLATFORMS = [
-  { key: "all", label: "All posts" },
-  { key: "instagram", label: "Instagram" },
-  { key: "linkedin", label: "LinkedIn" },
-  { key: "facebook", label: "Facebook" },
-  { key: "twitter", label: "X / Twitter" },
-] as const;
+// Every format is its own tab, grouped under its platform, because
+// "Instagram" was never the unit anyone works in -- a reel caption and an
+// 8-slide carousel are different jobs that happen to share a logo. The
+// character limit sits on each tab so the constraint is visible at the
+// moment of choosing, not after opening.
+interface FormatTab {
+  key: string;
+  label: string;
+  limit: number | null;
+}
+
+const PLATFORM_GROUPS: { platform: string; label: string; formats: FormatTab[] }[] = [
+  {
+    platform: "instagram",
+    label: "Instagram",
+    formats: [
+      { key: "reel", label: "Reel", limit: 2200 },
+      { key: "carousel", label: "Carousel", limit: 2200 },
+      { key: "single_image", label: "Image", limit: 2200 },
+      { key: "story", label: "Story", limit: null },
+    ],
+  },
+  {
+    platform: "linkedin",
+    label: "LinkedIn",
+    formats: [
+      { key: "post", label: "Post", limit: 3000 },
+      { key: "carousel_pdf", label: "Carousel", limit: 3000 },
+    ],
+  },
+  {
+    platform: "facebook",
+    label: "Facebook",
+    formats: [
+      { key: "facebook_post", label: "Post", limit: 63206 },
+      { key: "facebook_carousel", label: "Carousel", limit: 63206 },
+    ],
+  },
+  {
+    platform: "twitter",
+    label: "X",
+    formats: [{ key: "tweet", label: "Tweet", limit: 270 }],
+  },
+];
+
+const ALL_FORMATS = PLATFORM_GROUPS.flatMap((g) => g.formats);
 
 const FORMAT_LABEL: Record<string, string> = {
   reel: "Reel captions",
@@ -42,17 +81,7 @@ const FORMAT_LABEL: Record<string, string> = {
 };
 
 // Order within a platform: the format used most often first.
-const FORMAT_ORDER = [
-  "reel",
-  "carousel",
-  "single_image",
-  "story",
-  "post",
-  "carousel_pdf",
-  "facebook_post",
-  "facebook_carousel",
-  "tweet",
-];
+const FORMAT_ORDER = ALL_FORMATS.map((f) => f.key);
 
 interface FormatRow extends ChannelVersion {
   draft_id: string;
@@ -65,11 +94,11 @@ const PAGE_SIZE = 30;
 export default async function DraftsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ platform?: string }>;
+  searchParams: Promise<{ format?: string }>;
 }) {
   const params = await searchParams;
-  const active = PLATFORMS.some((p) => p.key === params.platform)
-    ? (params.platform as string)
+  const active = ALL_FORMATS.some((f) => f.key === params.format)
+    ? (params.format as string)
     : "all";
 
   const supabase = getSupabaseServerClient();
@@ -97,7 +126,7 @@ export default async function DraftsPage({
         .eq("status", "dismissed"),
       // Just the platform column: enough for the tab counts, without
       // dragging every body along to compute a number.
-      supabase.from("draft_formats").select("platform, draft_id"),
+      supabase.from("draft_formats").select("platform, format, draft_id"),
     ]);
 
   const rows = drafts ?? [];
@@ -109,8 +138,7 @@ export default async function DraftsPage({
   // describing the database, not the page.
   const visible = new Set(rows.map((d) => d.draft_id));
   const visibleFormats = (platformCounts ?? []).filter((f) => visible.has(f.draft_id));
-  const countFor = (key: string) =>
-    key === "all" ? rows.length : visibleFormats.filter((f) => f.platform === key).length;
+  const countFor = (key: string) => visibleFormats.filter((f) => f.format === key).length;
 
   // Which platforms a given draft has versions for, so the all-posts view
   // can link out without shipping any bodies.
@@ -124,25 +152,50 @@ export default async function DraftsPage({
     <div className="p-3 sm:p-4">
       <h1 className="mb-1 text-sm font-semibold text-text">Ready-made posts</h1>
       <p className="mb-4 text-xs text-faint">
-        Every draft written out for each channel you publish on. Pick a platform to see just
-        that channel&apos;s versions. Nothing here is auto-posted -- review before using.
+        Every draft written out for each format you publish in, inside that format&apos;s own
+        character limit. Pick one to see just those. Nothing here is auto-posted -- review
+        before using.
         {dismissedCount ? ` ${dismissedCount} dismissed draft${dismissedCount === 1 ? "" : "s"} hidden.` : ""}
       </p>
 
-      <div className="mb-5 flex flex-wrap items-center gap-1.5">
-        {PLATFORMS.map((p) => (
+      <div className="mb-5 flex flex-col gap-2">
+        <div>
           <Link
-            key={p.key}
-            href={p.key === "all" ? "/drafts" : `/drafts?platform=${p.key}`}
-            className={`rounded-md border px-2.5 py-1.5 text-xs transition-colors ${
-              p.key === active
-                ? "border-brand text-brand"
-                : "border-border text-dim hover:text-text"
+            href="/drafts"
+            className={`inline-block rounded-md border px-2.5 py-1.5 text-xs transition-colors ${
+              active === "all" ? "border-brand text-brand" : "border-border text-dim hover:text-text"
             }`}
           >
-            {p.label}
-            <span className="ml-1.5 text-[10px] tabular-nums opacity-60">{countFor(p.key)}</span>
+            All posts
+            <span className="ml-1.5 text-[10px] tabular-nums opacity-60">{rows.length}</span>
           </Link>
+        </div>
+
+        {PLATFORM_GROUPS.map((g) => (
+          <div key={g.platform} className="flex flex-wrap items-center gap-1.5">
+            {/* Fixed-width label so the format buttons line up down the
+                page rather than starting at a different x per row. */}
+            <span className="w-16 shrink-0 text-[11px] text-faint">{g.label}</span>
+            {g.formats.map((f) => (
+              <Link
+                key={f.key}
+                href={`/drafts?format=${f.key}`}
+                className={`rounded-md border px-2.5 py-1.5 text-xs transition-colors ${
+                  f.key === active
+                    ? "border-brand text-brand"
+                    : "border-border text-dim hover:text-text"
+                }`}
+              >
+                {f.label}
+                <span className="ml-1.5 text-[10px] tabular-nums opacity-60">{countFor(f.key)}</span>
+                {/* The limit belongs on the tab, not just inside: it is
+                    what decides which format you reach for. */}
+                <span className="ml-1.5 text-[10px] tabular-nums opacity-40">
+                  {f.limit ? f.limit.toLocaleString() : "no limit"}
+                </span>
+              </Link>
+            ))}
+          </div>
         ))}
       </div>
 
@@ -187,7 +240,7 @@ export default async function DraftsPage({
         // "moving very slow" described.
         <Suspense key={active} fallback={<PlatformSkeleton />}>
           <PlatformBodies
-            platform={active}
+            format={active}
             draftIds={rows.map((d) => d.draft_id)}
             hookByDraft={hookByDraft}
           />
@@ -220,7 +273,7 @@ function ChannelLinks({ platforms }: { platforms: Set<string> }) {
         .map((p) => (
           <Link
             key={p}
-            href={`/drafts?platform=${p}`}
+            href={`/drafts?format=${PLATFORM_GROUPS.find((g) => g.platform === p)!.formats[0].key}`}
             className="rounded border border-border px-1.5 py-0.5 text-[10px] text-dim transition-colors hover:text-text"
           >
             {PLATFORM_LABEL[p]}
@@ -250,11 +303,11 @@ function PlatformSkeleton() {
  * while this is still loading.
  */
 async function PlatformBodies({
-  platform,
+  format,
   draftIds,
   hookByDraft,
 }: {
-  platform: string;
+  format: string;
   draftIds: string[];
   hookByDraft: Map<string, string>;
 }) {
@@ -264,7 +317,7 @@ async function PlatformBodies({
     .from("draft_formats")
     .select("draft_id, platform, format, body, char_count, char_limit")
     .in("draft_id", draftIds)
-    .eq("platform", platform);
+    .eq("format", format);
   return <PlatformView rows={(data ?? []) as FormatRow[]} hookByDraft={hookByDraft} />;
 }
 
