@@ -19,7 +19,7 @@
  * source_caption carries the evidence the post was built on, so a human
  * can see why it was suggested.
  *
- * Usage: npm run generate-from-analysis -- [--count=5] [--market=US,CA] [--dry-run]
+ * Usage: npm run generate-from-analysis -- [--count=5] [--dry-run]
  *
  * Any --count above BATCH_SIZE is generated across several calls, each one
  * told which hooks the earlier batches already used so the batches don't
@@ -30,6 +30,7 @@ import "dotenv/config";
 import { readFileSync } from "node:fs";
 import { getSupabaseClient } from "./lib/supabaseClient.ts";
 
+const BUSINESS_DEF_PATH = new URL("../reference/business-definition.md", import.meta.url);
 const SKILL_DIR = new URL("../reference/arkabroad-voice-skill/", import.meta.url);
 
 interface HookRow {
@@ -79,12 +80,17 @@ async function main() {
   // in Australian specifics and that is the path of least resistance. It is
   // not wrong about the evidence; it just never reaches the other two
   // markets on its own. --market pins it.
-  const marketArg = (arg("market") ?? "").toUpperCase();
-  const markets = marketArg
-    ? marketArg.split(",").map((m) => m.trim()).filter((m) => ["AU", "US", "CA"].includes(m))
-    : [];
-  if (marketArg && markets.length === 0) {
-    throw new Error(`--market must be one or more of AU, US, CA (got "${marketArg}").`);
+  // --market is gone on purpose. It briefly existed to force variety after
+  // a run came back 24 AU / 1 CA / 0 US, on the assumption that Ark served
+  // all three markets. arkabroad.com says otherwise -- Australia only,
+  // "built for the Australian market, not generic advice" -- and what the
+  // flag actually produced was the founder's Melbourne story stamped [US].
+  // The AU skew was the model being right about the business.
+  if (arg("market")) {
+    throw new Error(
+      "--market is no longer supported: Ark Abroad serves the Australian market only " +
+        "(see reference/business-definition.md). Every draft is written for a reader in Australia."
+    );
   }
   const dryRun = process.argv.includes("--dry-run");
 
@@ -201,7 +207,15 @@ ${buildVoiceGuide()}
 
 ---
 
+WHO THIS IS FOR AND WHAT IS OUT OF SCOPE. Read this before writing anything. If a post would fail it, do not write that post -- pick a different angle from the evidence.
+
+${readFileSync(BUSINESS_DEF_PATH, "utf-8")}
+
+---
+
 You are given AGGREGATE competitive intelligence: what is actually working across dozens of competitor videos in the Australian, US and Canadian career-content markets. You are NOT adapting any single competitor video.
+
+The US and Canadian videos are in the evidence for their HOOK PATTERNS and STRUCTURES only. Borrow the shape; never borrow the market. Every post you write is for a reader IN AUSTRALIA who already holds Australian work rights.
 
 Your job: propose original Ark Abroad posts that put a high-scoring hook pattern and structure onto a subject the data shows is proven but barely covered. The combination should be one no competitor in the data has made yet. Ground every choice in the evidence given -- say which pattern and which gap each post is built on.
 
@@ -219,13 +233,7 @@ HARD RULES, no exceptions:
 
 Output ONLY valid JSON, no markdown fences, no preamble:
 [{"market":"AU|US|CA","built_on":"one sentence naming the pattern and the gap subject this uses, citing the numbers from the evidence","hook":"the opening line, opening cold","script":"the full reel or carousel script, ready to read","caption":"a short Instagram caption at the Instagram register"}]
-Exactly ${BATCH_SIZE} objects.${
-    markets.length
-      ? `
-
-MARKET IS FIXED for this batch: every object's "market" MUST be ${markets.join(" or ")}, and the script must be written for a reader in that market. Where the proof bank's figures are Australian, say so in the line rather than restating them as though they were local -- do not silently convert a salary band or a degree cost into another country's numbers, and do not invent that country's equivalents.`
-      : ""
-  }`;
+Exactly ${BATCH_SIZE} objects. Every object's "market" is "AU" -- Ark serves Australia only.`;
 
   const { default: Anthropic } = await import("@anthropic-ai/sdk");
   const anthropic = new Anthropic({ apiKey });
@@ -290,7 +298,8 @@ MARKET IS FIXED for this batch: every object's "market" MUST be ${markets.join("
   for (const p of posts) {
     const { error: insErr } = await supabase.from("generated_drafts").insert({
       competitor_name: "Cross-competitor analysis",
-      market: ["AU", "US", "CA"].includes(p.market) ? p.market : "AU",
+      // Always AU. The column stays because older rows carry other values.
+      market: "AU",
       source_post_id: null,
       source_caption: `Built on: ${p.built_on}`,
       hook: p.hook,

@@ -37,6 +37,7 @@ import { readFileSync } from "node:fs";
 import { getSupabaseClient } from "./lib/supabaseClient.ts";
 
 const VOICE_DOC_PATH = new URL("../reference/arkabroad-voice.md", import.meta.url);
+const BUSINESS_DEF_PATH = new URL("../reference/business-definition.md", import.meta.url);
 
 const HOOK_PATTERNS = [
   "contrarian_inversion", "cost_accounting", "empathy_pivot", "subdivision_teaching",
@@ -97,12 +98,25 @@ const sanitize = (s: string) =>
   s.replace(/[\uD800-\uDBFF](?![\uDC00-\uDFFF])/g, "").replace(/(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/g, "");
 
 function buildSystemPrompt(voiceDoc: string): string {
+  const businessDef = readFileSync(BUSINESS_DEF_PATH, "utf-8");
   return `You are tagging competitor short-form videos for Ark Abroad, a Melbourne talent accelerator helping internationally-trained professionals land corporate roles in Australia. You are given transcripts of competitors' HIGH-PERFORMING videos. Your job is to extract reusable structural intelligence from them.
 
 Here is Ark Abroad's brand voice document. You must judge brand_fit strictly against it, especially its "Never ships" list:
 
 <brand_voice_document>
 ${voiceDoc}
+
+---
+
+WHO ARK IS FOR, AND WHAT IS OUT OF SCOPE:
+
+${businessDef}
+
+A hook whose SUBJECT is out of scope still gets tagged -- the library is a
+record of what competitors do -- but it must be marked brand_fit "no" with
+the reason naming which rule it fails. Do not mark something "with_changes"
+when the subject itself is off-business; changing the words cannot make a
+visa hook relevant to a reader who already holds a visa.
 </brand_voice_document>
 
 For each video, return these fields:
