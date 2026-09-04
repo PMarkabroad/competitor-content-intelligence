@@ -178,7 +178,12 @@ export default async function HomePage() {
   // grouping them in JS. PostgREST caps an unfiltered select at 1000 rows
   // and competitor_posts is well past that, so a fetch-then-group would
   // silently under-report whichever platform sorts later.
-  const { data: idRows } = await supabase.from("competitors").select("competitor_id, platform");
+  // Fetched once and reused. This table used to be read three separate
+  // times on this page -- once for ids, once for an active count, once for
+  // the market breakdown -- each one its own round trip.
+  const { data: idRows } = await supabase
+    .from("competitors")
+    .select("competitor_id, platform, market, active, handle_verified");
   const igIds = (idRows ?? []).filter((r) => r.platform === "instagram").map((r) => r.competitor_id);
   const ttIds = (idRows ?? []).filter((r) => r.platform === "tiktok").map((r) => r.competitor_id);
 
@@ -218,6 +223,8 @@ export default async function HomePage() {
   const [
     screenedIg, screenedTt, trackedIg, trackedTt, activeIg, activeTt,
     postsIg, postsTt, trIg, trTt, hooksIg, hooksTt,
+    hookDataResult,
+    recentDraftsResult,
   ] = await Promise.all([
     countCandidates("instagram"), countCandidates("tiktok"),
     countCompetitors("instagram", false), countCompetitors("tiktok", false),
@@ -225,28 +232,32 @@ export default async function HomePage() {
     countByCompetitor("competitor_posts", igIds), countByCompetitor("competitor_posts", ttIds),
     countTranscripts(igIds), countTranscripts(ttIds),
     countByCompetitor("hook_library", igIds), countByCompetitor("hook_library", ttIds),
+    // Moved into this wave from further down the file, where each sat on
+    // its own await and added a full round trip to time-to-first-byte.
+    supabase
+      .from("hook_library")
+      .select("hook_id, post_id, hook_pattern, narrative_structure, opening_line, outlier_score, brand_fit, competitors(name, market, active)")
+      .order("outlier_score", { ascending: false }),
+    supabase
+      .from("generated_drafts")
+      .select("draft_id, hook, script, market, competitor_name, source_post_id")
+      .neq("status", "dismissed")
+      .order("created_at", { ascending: false })
+      .limit(4),
   ]);
+  const hookData = hookDataResult.data;
+  const recentDrafts = recentDraftsResult.data;
 
-  const { count: activeCountRaw } = await supabase
-    .from("competitors")
-    .select("*", { count: "exact", head: true })
-    .eq("active", true)
-    .eq("handle_verified", true);
-  const activeCount = activeCountRaw ?? 0;
-
-  const { data: compRows } = await supabase
-    .from("competitors")
-    .select("market, platform, active, handle_verified");
-  const activeComps = (compRows ?? []).filter((c) => c.active && c.handle_verified);
+  // Derived from idRows rather than re-queried. Safe here specifically
+  // because competitors is well under PostgREST's 1000-row cap (82 rows);
+  // the same shortcut on competitor_posts would silently truncate.
+  const activeComps = (idRows ?? []).filter((c) => c.active && c.handle_verified);
+  const activeCount = activeComps.length;
   const byMarket: Record<string, number> = {};
   for (const c of activeComps) {
     byMarket[c.market] = (byMarket[c.market] ?? 0) + 1;
   }
 
-  const { data: hookData } = await supabase
-    .from("hook_library")
-    .select("hook_id, post_id, hook_pattern, narrative_structure, opening_line, outlier_score, brand_fit, competitors(name, market, active)")
-    .order("outlier_score", { ascending: false });
   const hooks = ((hookData ?? []) as unknown as HookRow[]).filter(
     (h) => h.brand_fit !== "no" && h.competitors?.active !== false && h.outlier_score != null
   );
@@ -274,13 +285,6 @@ export default async function HomePage() {
     .slice(0, 4);
 
   const topHooks = hooks.filter((h) => cleanText(h.opening_line)).slice(0, 6);
-
-  const { data: recentDrafts } = await supabase
-    .from("generated_drafts")
-    .select("draft_id, hook, script, market, competitor_name, source_post_id")
-    .neq("status", "dismissed")
-    .order("created_at", { ascending: false })
-    .limit(4);
 
   return (
     <div className="p-4 sm:p-5">

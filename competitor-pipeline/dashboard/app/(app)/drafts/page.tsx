@@ -57,6 +57,10 @@ interface FormatRow extends ChannelVersion {
   draft_id: string;
 }
 
+// 100 cards x 9 channel bodies was ~417KB of text per page load, nearly
+// all of it behind an unopened tab. 30 is more than a sitting's worth.
+const PAGE_SIZE = 30;
+
 export default async function DraftsPage({
   searchParams,
 }: {
@@ -75,31 +79,41 @@ export default async function DraftsPage({
   // relevance audit dismissed 38 at once and every one of them stayed
   // visible. A dismissed draft is a decision already made; it does not
   // belong in the list of things to choose between.
-  const { data: drafts } = await supabase
-    .from("generated_drafts")
-    .select("*")
-    .neq("status", "dismissed")
-    .order("created_at", { ascending: false })
-    .limit(100);
-
-  const { count: dismissedCount } = await supabase
-    .from("generated_drafts")
-    .select("*", { count: "exact", head: true })
-    .eq("status", "dismissed");
+  // Everything that does not depend on another query runs together. These
+  // used to be awaited one after another, which added each round trip to
+  // Supabase to the time before anything rendered.
+  const [{ data: drafts }, { count: dismissedCount }, { data: platformCounts }] =
+    await Promise.all([
+      supabase
+        .from("generated_drafts")
+        .select("*")
+        .neq("status", "dismissed")
+        .order("created_at", { ascending: false })
+        .limit(PAGE_SIZE),
+      supabase
+        .from("generated_drafts")
+        .select("*", { count: "exact", head: true })
+        .eq("status", "dismissed"),
+      // Just the platform column: enough for the tab counts, without
+      // dragging every body along to compute a number.
+      supabase.from("draft_formats").select("platform"),
+    ]);
 
   const rows = drafts ?? [];
 
-  // Channel versions for everything on this page, fetched in one query and
-  // grouped in memory rather than one query per card.
-  const { data: formatRows } = rows.length
-    ? await supabase
-        .from("draft_formats")
-        .select("draft_id, platform, format, body, char_count, char_limit")
-        .in(
-          "draft_id",
-          rows.map((d) => d.draft_id)
-        )
-    : { data: [] as FormatRow[] };
+  // Bodies are large -- 576 versions come to ~417KB of text -- so only the
+  // ones actually about to be rendered are fetched. Pulling all of them and
+  // filtering in JS made /drafts the slowest page on the site: 4.7s, most
+  // of it transferring text that was then thrown away.
+  let formatQuery = supabase
+    .from("draft_formats")
+    .select("draft_id, platform, format, body, char_count, char_limit")
+    .in(
+      "draft_id",
+      rows.map((d) => d.draft_id)
+    );
+  if (active !== "all") formatQuery = formatQuery.eq("platform", active);
+  const { data: formatRows } = rows.length ? await formatQuery : { data: [] as FormatRow[] };
 
   const all = (formatRows ?? []) as FormatRow[];
 
@@ -110,8 +124,12 @@ export default async function DraftsPage({
   }
 
   const hookByDraft = new Map(rows.map((d) => [d.draft_id, d.hook as string]));
+  // Counted from the platform-only query, so the tabs stay accurate even
+  // though `all` now holds just the active platform's rows.
   const countFor = (key: string) =>
-    key === "all" ? rows.length : all.filter((f) => f.platform === key).length;
+    key === "all"
+      ? rows.length
+      : (platformCounts ?? []).filter((f) => f.platform === key).length;
 
   return (
     <div className="p-3 sm:p-4">
@@ -173,10 +191,7 @@ export default async function DraftsPage({
           ))}
         </div>
       ) : (
-        <PlatformView
-          rows={all.filter((f) => f.platform === active)}
-          hookByDraft={hookByDraft}
-        />
+        <PlatformView rows={all} hookByDraft={hookByDraft} />
       )}
     </div>
   );
