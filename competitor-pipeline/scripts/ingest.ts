@@ -21,6 +21,7 @@ import { appendFileSync, mkdirSync } from "node:fs";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import "dotenv/config";
 import { getSupabaseClient } from "./lib/supabaseClient.ts";
+import { withRetry } from "./lib/retry.ts";
 
 const LOG_DIR = new URL("../logs/", import.meta.url);
 
@@ -180,7 +181,10 @@ export async function ingestPost(
   // last_scraped_at is stamped server-side by
   // trg_competitor_posts_last_scraped_at (migration 003) regardless of what's
   // sent here -- omitted for the same reason as scraped_at above.
-  const { error } = await supabase.from("competitor_posts").upsert(
+  // Retried on transient failure. A single Gateway Timeout here killed the
+  // 2026-09-13 scheduled harvest after Apify had already been paid.
+  const { error } = await withRetry("competitor_posts upsert", () =>
+    supabase.from("competitor_posts").upsert(
     {
       competitor_id: competitorId,
       platform_post_id: platformPostId,
@@ -200,6 +204,7 @@ export async function ingestPost(
       raw,
     },
     { onConflict: "competitor_id,platform_post_id" }
+    )
   );
   if (error) throw new Error(`competitor_posts upsert failed: ${error.message}`);
 }
@@ -213,7 +218,8 @@ export async function ingestTranscript(
   const transcript = String(item.transcript ?? item.captionText ?? "");
   const openingLine = transcript.split(/[.!?\n]/)[0]?.trim() ?? null;
 
-  const { error } = await supabase.from("competitor_transcripts").upsert(
+  const { error } = await withRetry("competitor_transcripts upsert", () =>
+    supabase.from("competitor_transcripts").upsert(
     {
       post_id: postId,
       transcript,
@@ -222,6 +228,7 @@ export async function ingestTranscript(
       raw,
     },
     { onConflict: "post_id" }
+    )
   );
   if (error) throw new Error(`competitor_transcripts upsert failed: ${error.message}`);
 }
