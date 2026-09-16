@@ -236,8 +236,19 @@ async function main() {
   // that did not exist before the carousel-heavy mix. Keying on that, rather than on
   // "any row at all", lets this same script top up drafts written under
   // the old one-of-each mix without regenerating everything.
-  const { data: existing } = await supabase.from("draft_formats").select("draft_id").eq("format", "carousel_story");
-  const haveFormats = new Set((existing ?? []).map((r) => r.draft_id));
+  // Every (draft, format) pair that already exists. A draft is only asked
+  // for the formats it is missing: the first backfill regenerated four
+  // existing pieces per draft to add one new carousel, which was 80% wasted
+  // work and an hour instead of twelve minutes.
+  const { data: existing } = await supabase.from("draft_formats").select("draft_id, format");
+  const have = new Map<string, Set<string>>();
+  for (const r of existing ?? []) {
+    if (!have.has(r.draft_id)) have.set(r.draft_id, new Set());
+    have.get(r.draft_id)!.add(r.format);
+  }
+  // A draft counts as done once it has the story carousel -- the format
+  // that did not exist before the carousel-heavy mix.
+  const haveFormats = new Set([...have.entries()].filter(([, f]) => f.has("carousel_story")).map(([id]) => id));
 
   const todo = (drafts ?? []).filter((d) => regenerate || !haveFormats.has(d.draft_id));
   const batch = limit ? todo.slice(0, limit) : todo;
@@ -283,7 +294,14 @@ One object per format, using exactly the format keys listed under CHANNELS TO WR
     // in this batch, so re-running on a few stragglers does not restart the
     // cycle and hand every one of them the same three formats.
     const position = (drafts ?? []).findIndex((x) => x.draft_id === d.draft_id);
-    const draftFormats = formatsFor(position < 0 ? i : position);
+    const already = have.get(d.draft_id) ?? new Set<string>();
+    const draftFormats = formatsFor(position < 0 ? i : position).filter(
+      (f) => regenerate || !already.has(f.format)
+    );
+    if (draftFormats.length === 0) {
+      console.log(`  [${i + 1}/${batch.length}] nothing missing, skipped.`);
+      continue;
+    }
     const specSheet = draftFormats
       .map((f) => `${f.format} -- ${f.label}` + String.fromCharCode(10) + `  hard limit: ${f.charLimit ?? "none"}` + String.fromCharCode(10) + `  target: ${f.target}` + String.fromCharCode(10) + `  ${f.brief}`)
       .join(String.fromCharCode(10, 10));
