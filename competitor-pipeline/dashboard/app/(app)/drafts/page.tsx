@@ -30,7 +30,13 @@ interface FormatTab {
   key: string;
   label: string;
   limit: number | null;
+  // Stored format keys this tab covers. Most tabs are one key; the
+  // Instagram carousel tab is two, because each post now carries a
+  // framework carousel AND a story carousel and they belong together.
+  keys?: string[];
 }
+
+const keysOf = (f: FormatTab) => f.keys ?? [f.key];
 
 const PLATFORM_GROUPS: { platform: string; label: string; formats: FormatTab[] }[] = [
   {
@@ -38,7 +44,7 @@ const PLATFORM_GROUPS: { platform: string; label: string; formats: FormatTab[] }
     label: "Instagram",
     formats: [
       { key: "reel", label: "Reel", limit: 2200 },
-      { key: "carousel", label: "Carousel", limit: 2200 },
+      { key: "carousel", label: "Carousel", limit: 2200, keys: ["carousel", "carousel_story"] },
       { key: "single_image", label: "Image", limit: 2200 },
       { key: "story", label: "Story", limit: null },
     ],
@@ -70,7 +76,8 @@ const ALL_FORMATS = PLATFORM_GROUPS.flatMap((g) => g.formats);
 
 const FORMAT_LABEL: Record<string, string> = {
   reel: "Reel captions",
-  carousel: "Carousels",
+  carousel: "Carousels (framework)",
+  carousel_story: "Carousels (story)",
   single_image: "Single image",
   story: "Stories",
   post: "Posts",
@@ -81,7 +88,7 @@ const FORMAT_LABEL: Record<string, string> = {
 };
 
 // Order within a platform: the format used most often first.
-const FORMAT_ORDER = ALL_FORMATS.map((f) => f.key);
+const FORMAT_ORDER = ALL_FORMATS.flatMap((f) => keysOf(f));
 
 interface FormatRow extends ChannelVersion {
   draft_id: string;
@@ -138,7 +145,8 @@ export default async function DraftsPage({
   // describing the database, not the page.
   const visible = new Set(rows.map((d) => d.draft_id));
   const visibleFormats = (platformCounts ?? []).filter((f) => visible.has(f.draft_id));
-  const countFor = (key: string) => visibleFormats.filter((f) => f.format === key).length;
+  const countFor = (tab: FormatTab) =>
+    visibleFormats.filter((f) => keysOf(tab).includes(f.format)).length;
 
   // Which platforms a given draft has versions for, so the all-posts view
   // can link out without shipping any bodies.
@@ -187,7 +195,7 @@ export default async function DraftsPage({
                 }`}
               >
                 {f.label}
-                <span className="ml-1.5 text-[10px] tabular-nums opacity-60">{countFor(f.key)}</span>
+                <span className="ml-1.5 text-[10px] tabular-nums opacity-60">{countFor(f)}</span>
                 {/* The limit belongs on the tab, not just inside: it is
                     what decides which format you reach for. */}
                 <span className="ml-1.5 text-[10px] tabular-nums opacity-40">
@@ -240,7 +248,7 @@ export default async function DraftsPage({
         // "moving very slow" described.
         <Suspense key={active} fallback={<PlatformSkeleton />}>
           <PlatformBodies
-            format={active}
+            formatKeys={keysOf(ALL_FORMATS.find((f) => f.key === active)!)}
             draftIds={rows.map((d) => d.draft_id)}
             hookByDraft={hookByDraft}
           />
@@ -303,11 +311,11 @@ function PlatformSkeleton() {
  * while this is still loading.
  */
 async function PlatformBodies({
-  format,
+  formatKeys,
   draftIds,
   hookByDraft,
 }: {
-  format: string;
+  formatKeys: string[];
   draftIds: string[];
   hookByDraft: Map<string, string>;
 }) {
@@ -317,7 +325,7 @@ async function PlatformBodies({
     .from("draft_formats")
     .select("draft_id, platform, format, body, char_count, char_limit")
     .in("draft_id", draftIds)
-    .eq("format", format);
+    .in("format", formatKeys);
   return <PlatformView rows={(data ?? []) as FormatRow[]} hookByDraft={hookByDraft} />;
 }
 

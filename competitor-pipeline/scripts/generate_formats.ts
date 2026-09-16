@@ -52,7 +52,16 @@ const FORMATS: FormatSpec[] = [
     charLimit: 2200,
     target: "600-1200 characters",
     brief:
-      "Write the slides, then the caption. Format as SLIDE 1: through SLIDE 6: (5-8 slides), each slide one idea in under 15 words, then a blank line and CAPTION: with the supporting text. Slide 1 is the hook; the last slide is the ask.",
+      "FRAMEWORK carousel. Write the slides, then the caption. Format as SLIDE 1: through SLIDE 6: (5-8 slides), each slide one idea in under 15 words, then a blank line and CAPTION: with the supporting text. Slide 1 is the hook; the last slide is the ask. Numbered, structural, one step or one rule per slide.",
+  },
+  {
+    platform: "instagram",
+    format: "carousel_story",
+    label: "Instagram carousel (story)",
+    charLimit: 2200,
+    target: "600-1200 characters",
+    brief:
+      "STORY carousel -- a different post from the framework one, not a rewording of it. Same source idea told as a sequence of beats: SLIDE 1 opens mid-scene or on the moment things went wrong, each following slide is the next thing that happened, the turn comes two-thirds through, and the last slide lands the point plus the ask. Format as SLIDE 1: through the last slide (6-9 slides), each under 20 words, then a blank line and CAPTION:. No numbered lists, no headings -- it reads like someone telling you what happened.",
   },
   {
     platform: "instagram",
@@ -122,6 +131,31 @@ const FORMATS: FormatSpec[] = [
 interface Variant {
   format: string;
   body: string;
+}
+
+/**
+ * Which formats each draft gets.
+ *
+ * The mix used to be a flat one-of-each, which made Instagram carousel 11%
+ * of everything produced. The requested mix is 40% carousel. Two carousels
+ * per draft plus three other formats is exactly that: 2 of 5.
+ *
+ * Every draft gets both carousels. The other eight formats rotate in fixed
+ * groups of three, so over any four consecutive drafts each of them appears
+ * at least once, and which ones a given draft carries is predictable rather
+ * than random. Change the ratio here, not in the loop.
+ */
+const ALWAYS = ["carousel", "carousel_story"];
+const ROTATION: string[][] = [
+  ["reel", "post", "tweet"],
+  ["single_image", "facebook_post", "carousel_pdf"],
+  ["story", "facebook_carousel", "reel"],
+  ["post", "tweet", "facebook_post"],
+];
+
+function formatsFor(index: number): FormatSpec[] {
+  const keys = [...ALWAYS, ...ROTATION[index % ROTATION.length]];
+  return FORMATS.filter((f) => keys.includes(f.format));
 }
 
 function arg(name: string): string | null {
@@ -197,7 +231,11 @@ async function main() {
     .order("created_at", { ascending: false });
   if (error) throw new Error(`Failed to read drafts: ${error.message}`);
 
-  const { data: existing } = await supabase.from("draft_formats").select("draft_id");
+  // A draft counts as done once it has the story carousel -- the format
+  // that did not exist before the 40% mix. Keying on that, rather than on
+  // "any row at all", lets this same script top up drafts written under
+  // the old one-of-each mix without regenerating everything.
+  const { data: existing } = await supabase.from("draft_formats").select("draft_id").eq("format", "carousel_story");
   const haveFormats = new Set((existing ?? []).map((r) => r.draft_id));
 
   const todo = (drafts ?? []).filter((d) => regenerate || !haveFormats.has(d.draft_id));
@@ -207,7 +245,7 @@ async function main() {
     console.log("Every live draft already has channel versions. Nothing to do.");
     return;
   }
-  console.log(`${batch.length} draft(s) to expand into ${FORMATS.length} channel version(s) each.\n`);
+  console.log(`${batch.length} draft(s) to expand -- 2 carousels + 3 rotating formats each (40% carousel).` + String.fromCharCode(10));
 
   const { default: Anthropic } = await import("@anthropic-ai/sdk");
   const anthropic = new Anthropic({ apiKey });
@@ -234,16 +272,21 @@ Rules:
 
 Output ONLY a JSON array, no markdown fences, no preamble:
 [{"format": "<the format key>", "body": "<the full text for that channel>"}]
-One object per format, using these exact format keys: ${FORMATS.map((f) => f.format).join(", ")}.`;
-
-  const specSheet = FORMATS.map(
-    (f) => `${f.format} -- ${f.label}\n  hard limit: ${f.charLimit ?? "none"}\n  target: ${f.target}\n  ${f.brief}`
-  ).join("\n\n");
+One object per format, using exactly the format keys listed under CHANNELS TO WRITE -- no others.`;
 
   let written = 0;
   let failed = 0;
 
   for (const [i, d] of batch.entries()) {
+    // Rotation is keyed on the draft's position in the whole live set, not
+    // in this batch, so re-running on a few stragglers does not restart the
+    // cycle and hand every one of them the same three formats.
+    const position = (drafts ?? []).findIndex((x) => x.draft_id === d.draft_id);
+    const draftFormats = formatsFor(position < 0 ? i : position);
+    const specSheet = draftFormats
+      .map((f) => `${f.format} -- ${f.label}` + String.fromCharCode(10) + `  hard limit: ${f.charLimit ?? "none"}` + String.fromCharCode(10) + `  target: ${f.target}` + String.fromCharCode(10) + `  ${f.brief}`)
+      .join(String.fromCharCode(10, 10));
+
     const user = `SOURCE POST (market ${d.market})
 
 HOOK: ${d.hook}
@@ -281,7 +324,7 @@ ${specSheet}`;
     const rows = [];
     const overLimit: string[] = [];
     for (const v of variants) {
-      const spec = FORMATS.find((f) => f.format === v.format);
+      const spec = draftFormats.find((f) => f.format === v.format);
       if (!spec || !v.body?.trim()) continue;
       const body = v.body.trim();
       // Refused here as well as by the DB constraint, so an over-limit body
