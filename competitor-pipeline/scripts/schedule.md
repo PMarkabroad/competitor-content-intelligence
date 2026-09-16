@@ -27,6 +27,11 @@ nothing to publish, which is most of the point. Every step runs with
 continue-on-error so one failure costs a stage rather than the night --
 if transcription dies, hooks that already have transcripts still get tagged.
 
+Format mix, set 2026-09-16: every generated post gets two Instagram
+carousels (a framework one and a story one) plus two other formats on a
+fixed four-post rotation -- 50% Instagram carousel by count. The ratio lives
+in `ALWAYS` / `ROTATION` in `generate_formats.ts` and nowhere else.
+
 Two caps are deliberate. `--limit=25` on transcription bounds Apify spend on
 a week with an unusual number of outliers; the script's own spend guard is
 the other half. `--count=8` on generation exists because Anthropic has no

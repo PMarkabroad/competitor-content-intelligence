@@ -137,20 +137,21 @@ interface Variant {
  * Which formats each draft gets.
  *
  * The mix used to be a flat one-of-each, which made Instagram carousel 11%
- * of everything produced. The requested mix is 40% carousel. Two carousels
- * per draft plus three other formats is exactly that: 2 of 5.
+ * of everything produced. It was raised to 40% on 2026-09-16 and to 50%
+ * the same day. Two carousels per draft plus two other formats is exactly
+ * that: 2 of 4.
  *
  * Every draft gets both carousels. The other eight formats rotate in fixed
- * groups of three, so over any four consecutive drafts each of them appears
- * at least once, and which ones a given draft carries is predictable rather
- * than random. Change the ratio here, not in the loop.
+ * pairs, so over any four consecutive drafts each of them appears exactly
+ * once, and which pair a given draft carries is predictable rather than
+ * random. Change the ratio here, not in the loop.
  */
 const ALWAYS = ["carousel", "carousel_story"];
 const ROTATION: string[][] = [
-  ["reel", "post", "tweet"],
-  ["single_image", "facebook_post", "carousel_pdf"],
-  ["story", "facebook_carousel", "reel"],
-  ["post", "tweet", "facebook_post"],
+  ["reel", "post"],
+  ["tweet", "single_image"],
+  ["facebook_post", "carousel_pdf"],
+  ["story", "facebook_carousel"],
 ];
 
 function formatsFor(index: number): FormatSpec[] {
@@ -232,7 +233,7 @@ async function main() {
   if (error) throw new Error(`Failed to read drafts: ${error.message}`);
 
   // A draft counts as done once it has the story carousel -- the format
-  // that did not exist before the 40% mix. Keying on that, rather than on
+  // that did not exist before the carousel-heavy mix. Keying on that, rather than on
   // "any row at all", lets this same script top up drafts written under
   // the old one-of-each mix without regenerating everything.
   const { data: existing } = await supabase.from("draft_formats").select("draft_id").eq("format", "carousel_story");
@@ -245,7 +246,7 @@ async function main() {
     console.log("Every live draft already has channel versions. Nothing to do.");
     return;
   }
-  console.log(`${batch.length} draft(s) to expand -- 2 carousels + 3 rotating formats each (40% carousel).` + String.fromCharCode(10));
+  console.log(`${batch.length} draft(s) to expand -- 2 carousels + 2 rotating formats each (50% carousel).` + String.fromCharCode(10));
 
   const { default: Anthropic } = await import("@anthropic-ai/sdk");
   const anthropic = new Anthropic({ apiKey });
