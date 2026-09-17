@@ -119,7 +119,7 @@ export default async function DraftsPage({
   // Everything that does not depend on another query runs together. These
   // used to be awaited one after another, which added each round trip to
   // Supabase to the time before anything rendered.
-  const [{ data: drafts }, { count: dismissedCount }, { data: platformCounts }] =
+  const [{ data: drafts }, { count: dismissedCount }, { data: platformCounts }, { data: liveIds }] =
     await Promise.all([
       supabase
         .from("generated_drafts")
@@ -134,19 +134,36 @@ export default async function DraftsPage({
       // Just the platform column: enough for the tab counts, without
       // dragging every body along to compute a number.
       supabase.from("draft_formats").select("platform, format, draft_id"),
+      // Every live draft id, newest first. Ids only, so this stays cheap
+      // however large the backlog gets.
+      supabase
+        .from("generated_drafts")
+        .select("draft_id")
+        .neq("status", "dismissed")
+        .order("created_at", { ascending: false }),
     ]);
 
   const rows = drafts ?? [];
 
   const hookByDraft = new Map(rows.map((d) => [d.draft_id, d.hook as string]));
 
-  // Counted over the drafts actually on this page. Counting every row in the
-  // table instead made the X tab read 70 while showing 30 -- the count was
-  // describing the database, not the page.
-  const visible = new Set(rows.map((d) => d.draft_id));
-  const visibleFormats = (platformCounts ?? []).filter((f) => visible.has(f.draft_id));
+  // Counted over EVERY live draft, and the format view shows every one of
+  // them -- so the number on a tab is the number of pieces you get when you
+  // open it, and it only ever goes up as content is added.
+  //
+  // This replaces a count over the 30 newest posts only. That was itself a
+  // fix for a tab reading 70 while showing 30, but it had the opposite
+  // failure: once new posts carried two of the eight minor formats instead
+  // of all eight, the Reel tab dropped from 30 to 24 on a day reels went
+  // UP from 94 to 96. A count that falls when content grows is worse than
+  // either mismatch.
+  const live = new Set((liveIds ?? []).map((d) => d.draft_id));
+  const liveFormats = (platformCounts ?? []).filter((f) => live.has(f.draft_id));
   const countFor = (tab: FormatTab) =>
-    visibleFormats.filter((f) => keysOf(tab).includes(f.format)).length;
+    liveFormats.filter((f) => keysOf(tab).includes(f.format)).length;
+  // Card view helpers still work off the 30 on screen.
+  const visible = new Set(rows.map((d) => d.draft_id));
+  const visibleFormats = liveFormats.filter((f) => visible.has(f.draft_id));
 
   // Which platforms a given draft has versions for, so the all-posts view
   // can link out without shipping any bodies.
@@ -249,8 +266,7 @@ export default async function DraftsPage({
         <Suspense key={active} fallback={<PlatformSkeleton />}>
           <PlatformBodies
             formatKeys={keysOf(ALL_FORMATS.find((f) => f.key === active)!)}
-            draftIds={rows.map((d) => d.draft_id)}
-            hookByDraft={hookByDraft}
+            draftIds={(liveIds ?? []).map((d) => d.draft_id)}
           />
         </Suspense>
       )}
@@ -313,20 +329,30 @@ function PlatformSkeleton() {
 async function PlatformBodies({
   formatKeys,
   draftIds,
-  hookByDraft,
 }: {
   formatKeys: string[];
   draftIds: string[];
-  hookByDraft: Map<string, string>;
 }) {
-  if (draftIds.length === 0) return <PlatformView rows={[]} hookByDraft={hookByDraft} />;
+  if (draftIds.length === 0) return <PlatformView rows={[]} hookByDraft={new Map()} />;
   const supabase = getSupabaseServerClient();
-  const { data } = await supabase
-    .from("draft_formats")
-    .select("draft_id, platform, format, body, char_count, char_limit")
-    .in("draft_id", draftIds)
-    .in("format", formatKeys);
-  return <PlatformView rows={(data ?? []) as FormatRow[]} hookByDraft={hookByDraft} />;
+  // Bodies and their source hooks, for every live draft -- not just the 30
+  // cards on the all-posts view. Fetched here rather than passed in so the
+  // format view is complete on its own.
+  const [{ data: bodies }, { data: hooks }] = await Promise.all([
+    supabase
+      .from("draft_formats")
+      .select("draft_id, platform, format, body, char_count, char_limit")
+      .in("draft_id", draftIds)
+      .in("format", formatKeys),
+    supabase.from("generated_drafts").select("draft_id, hook").in("draft_id", draftIds),
+  ]);
+  const hookByDraft = new Map((hooks ?? []).map((d) => [d.draft_id as string, d.hook as string]));
+  // draftIds arrive newest-first; keep the bodies in that order.
+  const rank = new Map(draftIds.map((id, i) => [id, i]));
+  const rows = ((bodies ?? []) as FormatRow[]).sort(
+    (a, b) => (rank.get(a.draft_id) ?? 0) - (rank.get(b.draft_id) ?? 0)
+  );
+  return <PlatformView rows={rows} hookByDraft={hookByDraft} />;
 }
 
 function PlatformView({
