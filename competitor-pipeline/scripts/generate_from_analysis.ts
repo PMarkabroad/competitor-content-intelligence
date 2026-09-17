@@ -28,6 +28,7 @@
 
 import "dotenv/config";
 import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 import { getSupabaseClient } from "./lib/supabaseClient.ts";
 
 const BUSINESS_DEF_PATH = new URL("../reference/business-definition.md", import.meta.url);
@@ -328,7 +329,13 @@ Exactly ${BATCH_SIZE} objects. Every object's "market" is "AU" -- Ark serves Aus
       const { execSync } = await import("node:child_process");
       execSync("npm run generate-formats", {
         stdio: "inherit",
-        cwd: new URL("..", import.meta.url).pathname.replace(/^\/([A-Za-z]:)/, "$1"),
+        // fileURLToPath, not a hand-rolled pathname munge: a URL pathname
+        // percent-encodes spaces, and this repo lives under "Deepak Files/
+        // Arkabroad Claude/...". The old regex produced a folder that does
+        // not exist, npm died there, and the chain reported "channel
+        // versions failed" while the direct command worked fine. Fine on
+        // GitHub (Linux, no spaces), broken on the laptop.
+        cwd: fileURLToPath(new URL("..", import.meta.url)),
       });
     } catch {
       console.error("Channel versions failed -- the posts are saved. Run `npm run generate-formats` to retry.");
