@@ -41,9 +41,9 @@
   },
   "tiktokSearch": {
     "actorId": "clockworks/tiktok-scraper",
-    "build": "0.0.597",
-    "pinnedAt": "2026-08-26",
-    "verifiedVia": "GET https://api.apify.com/v2/acts/clockworks~tiktok-scraper -- confirmed this exact build (buildNumberInt 597) is the actor's own 'latest' tag as of pin date; 243K+ total users",
+    "build": "0.0.610",
+    "pinnedAt": "2026-09-27",
+    "verifiedVia": "Re-pinned 0.0.597 -> 0.0.610 on 2026-09-27. Apify's run endpoint returned 403 'Build with number \"0.0.597\" was not found' -- clockworks DELETES old builds, so a pin here is not permanent. Confirmed by running the new build with this exact input and checking the fields the pipeline reads. NOTE the publisher split: every clockworks/* pin in this file was dead at the same time while every apify/* pin (0.0.587, 0.0.579, 0.0.549, 0.0.654) was still alive and was left alone -- re-pinning a working build without re-verifying its output shape is the drift that pinning exists to prevent. Do NOT check a pin via GET /v2/acts/<id>/builds/<number>: that path wants a build ID, returns 404 for a perfectly good build number, and reading it as deletion produced a false 'all eight builds are gone' diagnosis. Use the paginated builds LIST, which is what scripts/check_actor_builds.ts now does.",
     "input": {
       "searchQueries": [
         "<seed-query>",
@@ -55,9 +55,9 @@
   },
   "tiktokPosts": {
     "actorId": "clockworks/tiktok-scraper",
-    "build": "0.0.597",
-    "pinnedAt": "2026-08-26",
-    "verifiedVia": "Same actor/build as tiktokSearch above -- confirmed its `profiles` input mode (pull a profile's own videos) via GET .../builds/default inputSchema on 2026-08-26",
+    "build": "0.0.610",
+    "pinnedAt": "2026-09-27",
+    "verifiedVia": "Re-pinned 0.0.597 -> 0.0.610 on 2026-09-27. Apify's run endpoint returned 403 'Build with number \"0.0.597\" was not found' -- clockworks DELETES old builds, so a pin here is not permanent. Confirmed by running the new build with this exact input and checking the fields the pipeline reads. NOTE the publisher split: every clockworks/* pin in this file was dead at the same time while every apify/* pin (0.0.587, 0.0.579, 0.0.549, 0.0.654) was still alive and was left alone -- re-pinning a working build without re-verifying its output shape is the drift that pinning exists to prevent. Do NOT check a pin via GET /v2/acts/<id>/builds/<number>: that path wants a build ID, returns 404 for a perfectly good build number, and reading it as deletion produced a false 'all eight builds are gone' diagnosis. Use the paginated builds LIST, which is what scripts/check_actor_builds.ts now does.",
     "input": {
       "profiles": [
         "<handle>",
@@ -70,9 +70,9 @@
   },
   "tiktokProfile": {
     "actorId": "clockworks/tiktok-profile-scraper",
-    "build": "0.0.468",
-    "pinnedAt": "2026-08-26",
-    "verifiedVia": "GET https://api.apify.com/v2/acts/clockworks~tiktok-profile-scraper -- confirmed this exact build (buildNumberInt 468) is the actor's own 'latest' tag as of pin date; 37K+ total users",
+    "build": "0.0.480",
+    "pinnedAt": "2026-09-27",
+    "verifiedVia": "Re-pinned 0.0.468 -> 0.0.480 on 2026-09-27. Apify's run endpoint returned 403 'Build with number \"0.0.468\" was not found' -- clockworks DELETES old builds, so a pin here is not permanent. Confirmed by running the new build with this exact input and checking the fields the pipeline reads. NOTE the publisher split: every clockworks/* pin in this file was dead at the same time while every apify/* pin (0.0.587, 0.0.579, 0.0.549, 0.0.654) was still alive and was left alone -- re-pinning a working build without re-verifying its output shape is the drift that pinning exists to prevent. Do NOT check a pin via GET /v2/acts/<id>/builds/<number>: that path wants a build ID, returns 404 for a perfectly good build number, and reading it as deletion produced a false 'all eight builds are gone' diagnosis. Use the paginated builds LIST, which is what scripts/check_actor_builds.ts now does.",
     "input": {
       "profiles": [
         "<handle>",
@@ -87,9 +87,9 @@
   },
   "tiktokTranscript": {
     "actorId": "clockworks/tiktok-transcript-extractor",
-    "build": "0.0.68",
-    "pinnedAt": "2026-08-26",
-    "verifiedVia": "GET https://api.apify.com/v2/acts/clockworks~tiktok-transcript-extractor -- confirmed this exact build (buildNumberInt 68) is the actor's own 'latest' tag as of pin date; same clockworks/ publisher already trusted for tiktokSearch/tiktokPosts/tiktokProfile; 343 total users, 5-star rating (6 reviews), 98.8% run success rate over the last 30 days (1784/1806)",
+    "build": "0.0.80",
+    "pinnedAt": "2026-09-27",
+    "verifiedVia": "Re-pinned 0.0.68 -> 0.0.80 on 2026-09-27. Apify's run endpoint returned 403 'Build with number \"0.0.68\" was not found' -- clockworks DELETES old builds, so a pin here is not permanent. Confirmed by running the new build with this exact input and checking the fields the pipeline reads. NOTE the publisher split: every clockworks/* pin in this file was dead at the same time while every apify/* pin (0.0.587, 0.0.579, 0.0.549, 0.0.654) was still alive and was left alone -- re-pinning a working build without re-verifying its output shape is the drift that pinning exists to prevent. Do NOT check a pin via GET /v2/acts/<id>/builds/<number>: that path wants a build ID, returns 404 for a perfectly good build number, and reading it as deletion produced a false 'all eight builds are gone' diagnosis. Use the paginated builds LIST, which is what scripts/check_actor_builds.ts now does.",
     "input": {
       "postURLs": [
         "<post-url>"

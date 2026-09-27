@@ -87,6 +87,15 @@ jobs:
             echo "value=content" >> "$GITHUB_OUTPUT"
           fi
 
+      # Deliberately NO continue-on-error. On 2026-09-26 the discovery sweep
+      # reported SUCCESS while producing nothing: every clockworks/* build
+      # pinned in apify/actors.json had been deleted, so each actor returned
+      # 403 "Build with number not found" and continue-on-error swallowed it.
+      # There is no point running anything whose actors cannot start, and a
+      # green tick on a no-op run is worse than a red one.
+      - name: Check pinned actor builds
+        run: npm run check-actor-builds
+
       - name: Harvest
         if: steps.mode.outputs.value == 'T2' || steps.mode.outputs.value == 'T3'
         run: npm run scheduled-harvest -- --tier ${{ steps.mode.outputs.value }}
@@ -114,7 +123,10 @@ jobs:
         with:
           name: discovery-shortlist-${{ github.run_id }}
           path: competitor-pipeline/out/discovery_shortlist_*.csv
-          if-no-files-found: warn
+          # error, not warn: the shortlist IS the deliverable of a discovery
+          # run. Producing none means the sweep failed, and the run should
+          # say so rather than passing with a warning nobody reads.
+          if-no-files-found: error
           retention-days: 90
 
       # --- content chain -------------------------------------------------

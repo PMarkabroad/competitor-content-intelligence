@@ -31,7 +31,8 @@
     "audit-relevance": "tsx scripts/audit_relevance.ts",
     "generate-formats": "tsx scripts/generate_formats.ts",
     "backfill-topic-slugs": "tsx scripts/backfill_topic_slugs.ts",
-    "purge-non-english": "tsx scripts/purge_non_english.ts"
+    "purge-non-english": "tsx scripts/purge_non_english.ts",
+    "check-actor-builds": "tsx scripts/check_actor_builds.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.120.0",
