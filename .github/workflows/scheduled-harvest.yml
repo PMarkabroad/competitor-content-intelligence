@@ -169,6 +169,43 @@ jobs:
         continue-on-error: true
         run: npm run generate-formats
 
+      # --- weekly email ---------------------------------------------------
+      # Only after the content stage, so Sunday sends ONE email rather than
+      # one per harvest. GitHub already emails on failure by default; this
+      # exists for the other case -- a run that passed but produced nothing,
+      # which a green tick hides and a totals-only email would too.
+      - name: Build summary
+        if: steps.mode.outputs.value == 'content'
+        id: summary
+        continue-on-error: true
+        run: |
+          {
+            echo "body<<SUMMARY_EOF"
+            npm run --silent run-summary
+            echo "SUMMARY_EOF"
+          } >> "$GITHUB_OUTPUT"
+
+      # Skipped silently until the SMTP secrets exist, so the pipeline does
+      # not start failing over a notification. Recipient is a secret too:
+      # this repository is public and an address in a workflow file is a
+      # published address.
+      - name: Email the summary
+        if: steps.mode.outputs.value == 'content' && env.MAIL_USERNAME != ''
+        continue-on-error: true
+        env:
+          MAIL_USERNAME: ${{ secrets.MAIL_USERNAME }}
+        uses: dawidd6/action-send-mail@v3
+        with:
+          server_address: ${{ secrets.MAIL_SERVER || 'smtp.gmail.com' }}
+          server_port: 465
+          secure: true
+          username: ${{ secrets.MAIL_USERNAME }}
+          password: ${{ secrets.MAIL_PASSWORD }}
+          from: Ark competitor intel
+          to: ${{ secrets.MAIL_TO }}
+          subject: "Ark intel -- weekly run ${{ job.status }}"
+          body: ${{ steps.summary.outputs.body }}
+
       # Kept whether the run passed, failed or was skipped for budget --
       # a budget skip exits 0 by design, and the log is the only record.
       - name: Upload run log
