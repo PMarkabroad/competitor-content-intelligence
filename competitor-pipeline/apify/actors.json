@@ -1,9 +1,9 @@
 {
   "profile": {
     "actorId": "apify/instagram-profile-scraper",
-    "build": "0.0.587",
-    "pinnedAt": "2026-08-25",
-    "verifiedVia": "GET https://api.apify.com/v2/acts/apify~instagram-profile-scraper -- confirmed this exact build (buildNumberInt 587) is the actor's own 'latest' tag as of pin date",
+    "build": "0.0.621",
+    "pinnedAt": "2026-10-09",
+    "verifiedVia": "Re-pinned 0.0.587 -> 0.0.621 on 2026-10-09 after the 4 October scheduled runs all failed: the preflight (npm run check-actor-builds, added 27 Sep) caught 0.0.587 gone and stopped the run before spending, which is what it was for. Verified by running build 0.0.621 with the input this pipeline actually sends: usernames -> followersCount, followsCount, postsCount, biography, private.\n\nCORRECTION to the note left here on 2026-09-27: that said clockworks expires builds while apify keeps them. Wrong -- apify expires them too, just more slowly. clockworks pins died inside ~1 month, these apify pins lasted ~6 weeks. Treat EVERY pin as perishable regardless of publisher; roughly a monthly re-pin.\n\nTest fixtures rot as well: the reel URL used to smoke-test this actor had been deleted from Instagram, and the actor's 'Post does not exist' reply first read as output drift. Pull a live URL from competitor_posts instead -- and note those are stored as /p/<code>/ not /reel/<code>/, which this actor accepts.",
     "input": {
       "usernames": [
         "<handle>"
@@ -13,9 +13,9 @@
   },
   "posts": {
     "actorId": "apify/instagram-post-scraper",
-    "build": "0.0.579",
-    "pinnedAt": "2026-08-25",
-    "verifiedVia": "GET https://api.apify.com/v2/acts/apify~instagram-post-scraper -- confirmed this exact build (buildNumberInt 579) is the actor's own 'latest' tag as of pin date",
+    "build": "0.0.612",
+    "pinnedAt": "2026-10-09",
+    "verifiedVia": "Re-pinned 0.0.579 -> 0.0.612 on 2026-10-09 after the 4 October scheduled runs all failed: the preflight (npm run check-actor-builds, added 27 Sep) caught 0.0.579 gone and stopped the run before spending, which is what it was for. Verified by running build 0.0.612 with the input this pipeline actually sends: username+detailedData -> id, shortCode, caption, videoViewCount, likesCount, timestamp, type.\n\nCORRECTION to the note left here on 2026-09-27: that said clockworks expires builds while apify keeps them. Wrong -- apify expires them too, just more slowly. clockworks pins died inside ~1 month, these apify pins lasted ~6 weeks. Treat EVERY pin as perishable regardless of publisher; roughly a monthly re-pin.\n\nTest fixtures rot as well: the reel URL used to smoke-test this actor had been deleted from Instagram, and the actor's 'Post does not exist' reply first read as output drift. Pull a live URL from competitor_posts instead -- and note those are stored as /p/<code>/ not /reel/<code>/, which this actor accepts.",
     "input": {
       "username": [
         "<handle>"
@@ -28,9 +28,9 @@
   },
   "transcript": {
     "actorId": "apify/instagram-reel-scraper",
-    "build": "0.0.549",
-    "pinnedAt": "2026-08-25",
-    "verifiedVia": "GET https://api.apify.com/v2/acts/apify~instagram-reel-scraper -- confirmed this exact build (buildNumberInt 549) is the actor's own 'latest' tag as of pin date",
+    "build": "0.0.583",
+    "pinnedAt": "2026-10-09",
+    "verifiedVia": "Re-pinned 0.0.549 -> 0.0.583 on 2026-10-09 after the 4 October scheduled runs all failed: the preflight (npm run check-actor-builds, added 27 Sep) caught 0.0.549 gone and stopped the run before spending, which is what it was for. Verified by running build 0.0.583 with the input this pipeline actually sends: reel/post URL + includeTranscript -> transcript, id, shortCode, videoViewCount.\n\nCORRECTION to the note left here on 2026-09-27: that said clockworks expires builds while apify keeps them. Wrong -- apify expires them too, just more slowly. clockworks pins died inside ~1 month, these apify pins lasted ~6 weeks. Treat EVERY pin as perishable regardless of publisher; roughly a monthly re-pin.\n\nTest fixtures rot as well: the reel URL used to smoke-test this actor had been deleted from Instagram, and the actor's 'Post does not exist' reply first read as output drift. Pull a live URL from competitor_posts instead -- and note those are stored as /p/<code>/ not /reel/<code>/, which this actor accepts.",
     "input": {
       "username": [
         "<reel-post-url>"
@@ -100,9 +100,9 @@
   },
   "instagramDiscovery": {
     "actorId": "apify/instagram-hashtag-scraper",
-    "build": "0.0.654",
-    "pinnedAt": "2026-09-03",
-    "verifiedVia": "GET https://api.apify.com/v2/acts/apify~instagram-hashtag-scraper -- confirmed build 0.0.654 is the actor's own 'latest' tag as of pin date; 82K+ users, official apify/ namespace",
+    "build": "0.0.680",
+    "pinnedAt": "2026-10-09",
+    "verifiedVia": "Re-pinned 0.0.654 -> 0.0.680 on 2026-10-09. This one was still alive on 27 Sep and alive again at the 4 Oct failure (which listed only the three other apify pins), so it expired inside the following five days. Verified by running the new build with this file's own input and confirming ownerUsername is still present -- the account handle IS the output of discovery; the posts are only the means. Same lesson as the other pins: perishable regardless of publisher, re-pin monthly.",
     "input": {
       "hashtags": [
         "<hashtag-or-keyword>",
