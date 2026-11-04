@@ -383,7 +383,13 @@ async function main() {
     stage: "transcription",
     expected: targets.length,
     actual: transcribed,
-    detail: `${noCaptions} empty, ${failed} failed`,
+    // errored, not just counted in the detail string: an empty return and a
+    // failed call are the same row count and completely different events. A
+    // reel with no subtitle track yields nothing and is not billed; a failed
+    // call is the actor or the network breaking. Any error fails the stage
+    // regardless of batch size -- see ZERO_FLOOR.
+    errored: failed,
+    detail: `${noCaptions} empty (no subtitle track), ${failed} errored`,
   });
 }
 

@@ -65,6 +65,27 @@ export const MIN_RATIO: Record<string, number> = {
   discovery: 0.9,
 };
 
+/**
+ * The smallest batch in which writing NOTHING is a finding rather than noise.
+ *
+ * Default 1: for most stages, zero rows out of anything at all is a fault.
+ *
+ * transcription 5, because an empty return there is a legitimate outcome, not
+ * an error -- a reel with no subtitle track yields no text and is not billed.
+ * On a two-item batch "everything came back empty" is two coin flips, and
+ * failing the run on it skipped three healthy stages on 2026-11-04 over two
+ * subtitle-less reels. At five or more, all-empty stops being plausible: the
+ * last 67 Instagram transcriptions in a row all returned text, so an
+ * all-empty batch of that size is worth stopping for.
+ *
+ * This floor applies ONLY to the zero case. A batch of any size still has to
+ * clear MIN_RATIO, and anything that actually ERRORS fails regardless of size
+ * -- an error is the actor or the network breaking, which is never routine.
+ */
+export const ZERO_FLOOR: Record<string, number> = {
+  transcription: 5,
+};
+
 export interface StageResult {
   stage: string;
   expected: number;
@@ -73,6 +94,13 @@ export interface StageResult {
   minRatio?: number;
   /** Named items that produced nothing, so a shortfall is diagnosable from the log alone. */
   emptyItems?: string[];
+  /**
+   * Items that ERRORED, as distinct from items that legitimately came back
+   * with nothing. The two look identical in a row count and are not remotely
+   * the same event: an empty transcript means the reel had no subtitles, an
+   * errored one means the call broke. Any error at all fails the stage.
+   */
+  errored?: number;
   detail?: string;
 }
 
@@ -89,10 +117,26 @@ export function stageFailure(r: StageResult): string | null {
   const minRatio = r.minRatio ?? MIN_RATIO[r.stage] ?? 1;
   const named = r.emptyItems?.length ? `\n  Produced nothing: ${r.emptyItems.join(", ")}` : "";
 
-  if (r.actual === 0) {
+  // An error is never routine, at any batch size: it means the actor or the
+  // network broke, not that the content had nothing to give.
+  if ((r.errored ?? 0) > 0 && r.actual === 0) {
     return (
       `${formatStageResult(r)}${named}\n` +
-      `  STAGE WROTE NOTHING despite having ${r.expected} item(s) to process. ` +
+      `  STAGE WROTE NOTHING and ${r.errored} item(s) ERRORED. That is the call failing, ` +
+      `not the content coming back empty. Re-running is safe; read the per-item errors above.`
+    );
+  }
+
+  if (r.actual === 0) {
+    const zeroFloor = ZERO_FLOOR[r.stage] ?? 1;
+    // Too small a batch for "all of them came back empty" to mean anything.
+    // Reported by the caller, not failed here -- see ZERO_FLOOR.
+    if (r.expected < zeroFloor) return null;
+
+    return (
+      `${formatStageResult(r)}${named}\n` +
+      `  STAGE WROTE NOTHING despite having ${r.expected} item(s) to process` +
+      `${(r.errored ?? 0) === 0 ? ", and nothing errored" : ""}. ` +
       `This exits non-zero on purpose: a green tick on a no-op run is how this pipeline ` +
       `lost two weeks of data in September.`
     );
@@ -131,6 +175,7 @@ export interface LedgerEntry {
   actual: number;
   detail?: string;
   emptyItems?: string[];
+  errored?: number;
   blockedBy?: string;
   at: string;
 }
@@ -228,6 +273,7 @@ export function recordStage(r: StageResult): boolean {
     actual: r.actual,
     detail: r.detail,
     emptyItems: r.emptyItems,
+    errored: r.errored,
     at: new Date().toISOString(),
   });
   writeLedger(entries);
@@ -236,6 +282,19 @@ export function recordStage(r: StageResult): boolean {
     console.error(`\nFAILED ${failure}`);
     process.exitCode = 1;
     return false;
+  }
+  // Passed, but wrote nothing out of a batch too small for that to mean
+  // anything (see ZERO_FLOOR). Said out loud rather than filed as a plain OK:
+  // the run is green because the evidence is too thin to call it broken, not
+  // because everything is known to be fine.
+  if (r.actual === 0 && r.expected > 0) {
+    console.warn(
+      `\nOK (but empty) ${formatStageResult(r)}\n` +
+        `  Nothing written, nothing errored. Below this stage's ${ZERO_FLOOR[r.stage] ?? 1}-item ` +
+        `floor for treating an all-empty batch as a fault, so the run stays green. ` +
+        `If this repeats, it is no longer a small sample.`
+    );
+    return true;
   }
   console.log(`\nOK ${formatStageResult(r)}`);
   return true;
@@ -270,6 +329,10 @@ export function ledgerSummary(): { text: string; failed: string[]; skipped: stri
     } else {
       const pct = e.expected > 0 ? ` (${Math.round((e.actual / e.expected) * 100)}%)` : "";
       lines.push(`  [${e.stage}] ${e.outcome}: wrote ${e.actual} of ${e.expected}${pct}`);
+      // detail carries WHY -- "2 empty (no subtitle track), 0 errored", "20
+      // account(s) quiet since last run". Without it a green 0-of-2 line reads
+      // as unexplained, which is the thing this summary exists to prevent.
+      if (e.detail) lines.push(`      ${e.detail}`);
       if (e.emptyItems?.length) lines.push(`      produced nothing: ${e.emptyItems.join(", ")}`);
     }
   }
