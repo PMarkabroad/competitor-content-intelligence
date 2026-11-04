@@ -401,6 +401,13 @@ async function main() {
 
   if (pendingIds.length === 0) {
     console.log("Every transcript already has a hook_library row. Nothing to draft.");
+    // Recorded even though there was nothing to do. A stage that runs and
+    // records NOTHING is indistinguishable in the summary from one that died
+    // before reaching its check -- which is the exact ambiguity this ledger
+    // exists to remove. 0 of 0 is a real, healthy outcome and says so.
+    if (!dryRun) {
+      recordStage({ stage: "hook_tagging", expected: 0, actual: 0, detail: "nothing pending" });
+    }
     return;
   }
   console.log(

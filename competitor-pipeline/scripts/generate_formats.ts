@@ -259,6 +259,11 @@ async function main() {
 
   if (batch.length === 0) {
     console.log("Every live draft already has channel versions. Nothing to do.");
+    // Recorded even though there was nothing to do. A stage that runs and
+    // records NOTHING is indistinguishable in the summary from one that died
+    // before reaching its check -- which is the exact ambiguity this ledger
+    // exists to remove. 0 of 0 is a real, healthy outcome and says so.
+    recordStage({ stage: "channel_formats", expected: 0, actual: 0, detail: "every live draft already expanded" });
     return;
   }
   console.log(`${batch.length} draft(s) to expand -- 2 carousels + 2 rotating formats each (50% carousel).` + String.fromCharCode(10));

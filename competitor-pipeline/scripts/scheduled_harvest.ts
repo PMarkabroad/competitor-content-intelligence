@@ -80,6 +80,9 @@ async function main() {
   const competitors = (data ?? []) as Competitor[];
   if (competitors.length === 0) {
     console.log(`No active, verified ${tier}${platform ? ` ${platform}` : ""} competitors. Nothing to harvest.`);
+    // Recorded even with nothing to do: a stage absent from the summary is
+    // indistinguishable from one that died before its check.
+    recordStage({ stage: "harvest", expected: 0, actual: 0, detail: `no active verified ${tier} competitors` });
     return;
   }
 
@@ -93,6 +96,15 @@ async function main() {
     const message = `SKIPPED ${label} harvest: real spend $${spentSoFar.toFixed(4)} + estimated $${estimate.toFixed(4)} would exceed the $${cap} monthly cap.`;
     console.error(`\n*** ${message} ***\n`);
     logFlag("scheduled-harvest", message, { tier, platform, spentSoFar, estimate, cap, competitorCount: competitors.length });
+    // A budget skip exits 0 by design -- a decision, not a fault -- but it has
+    // to be visible. A summary that just omits harvest reads like a quiet
+    // week rather than a capped one, and those need different responses.
+    recordStage({
+      stage: "harvest",
+      expected: 0,
+      actual: 0,
+      detail: `SKIPPED FOR BUDGET: $${spentSoFar.toFixed(2)} spent + $${estimate.toFixed(2)} estimated would exceed the $${cap} cap`,
+    });
     return; // skip, not fail -- exit 0
   }
 

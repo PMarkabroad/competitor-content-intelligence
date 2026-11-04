@@ -184,6 +184,11 @@ async function main() {
   if (limit) rows = rows.slice(0, limit);
   if (rows.length === 0) {
     console.log("No outliers pending transcription.");
+    // Recorded even though there was nothing to do. A stage that runs and
+    // records NOTHING is indistinguishable in the summary from one that died
+    // before reaching its check -- which is the exact ambiguity this ledger
+    // exists to remove. 0 of 0 is a real, healthy outcome and says so.
+    recordStage({ stage: "transcription", expected: 0, actual: 0, detail: "no outliers pending" });
     return;
   }
 
@@ -246,6 +251,11 @@ async function main() {
 
   if (targets.length === 0) {
     console.log("No outliers with a post_url to transcribe.");
+    // Recorded even though there was nothing to do. A stage that runs and
+    // records NOTHING is indistinguishable in the summary from one that died
+    // before reaching its check -- which is the exact ambiguity this ledger
+    // exists to remove. 0 of 0 is a real, healthy outcome and says so.
+    recordStage({ stage: "transcription", expected: 0, actual: 0, detail: "no outlier had a post_url" });
     return;
   }
 
@@ -289,6 +299,16 @@ async function main() {
     const message = `SKIPPED transcription: real spend $${spentSoFar.toFixed(4)} + estimated $${estimate.toFixed(4)} would exceed the $${cap} monthly cap.`;
     console.error(`\n*** ${message} ***\n`);
     logFlag("transcribe-outliers", message, { spentSoFar, estimate, cap, count: targets.length });
+    // A budget skip exits 0 by design -- it is a decision, not a fault. But it
+    // must still be VISIBLE: a summary that simply omits transcription reads
+    // like a quiet week rather than a capped one, and the two call for
+    // completely different responses.
+    recordStage({
+      stage: "transcription",
+      expected: 0,
+      actual: 0,
+      detail: `SKIPPED FOR BUDGET: $${spentSoFar.toFixed(2)} spent + $${estimate.toFixed(2)} estimated would exceed the $${cap} cap`,
+    });
     return;
   }
 
