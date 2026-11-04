@@ -19,23 +19,21 @@ import "dotenv/config";
 import { config } from "../config.ts";
 import { getSupabaseClient } from "./lib/supabaseClient.ts";
 import {
-  type ActorsConfig,
   type Competitor,
   logFlag,
+  loadActors,
   getRealMonthToDateSpendUsd,
   estimateRunCostUsd,
   harvestCompetitors,
 } from "./lib/harvest.ts";
 
-const ACTORS_PATH = new URL("../apify/actors.json", import.meta.url);
 
 async function main() {
   const apifyToken = process.env.APIFY_TOKEN;
   if (!apifyToken) throw new Error("APIFY_TOKEN must be set.");
 
   const supabase = getSupabaseClient();
-  const { readFileSync } = await import("node:fs");
-  const actors = JSON.parse(readFileSync(ACTORS_PATH, "utf-8")) as ActorsConfig;
+  const actors = loadActors();
 
   const { data, error } = await supabase
     .from("competitors")

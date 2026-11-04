@@ -6,10 +6,11 @@
  * zero-new-posts placeholder item crashing ingestPost). A future fix
  * belongs here once, not in two copies that can drift apart.
  */
-import { appendFileSync, mkdirSync } from "node:fs";
+import { appendFileSync, mkdirSync, readFileSync } from "node:fs";
 import type { getSupabaseClient } from "./supabaseClient.ts";
 import { config } from "../../config.ts";
 import { ingestProfile, ingestPost } from "../ingest.ts";
+import { assertResponseShape } from "./response_shape.ts";
 
 const LOG_DIR = new URL("../../logs/", import.meta.url);
 
@@ -18,12 +19,43 @@ export type Tier = "T1" | "T2" | "T3";
 export interface ActorPin {
   actorId: string;
   build: string;
+  /**
+   * Which entry of apify/actors.json this is -- "posts", "tiktokProfile" and
+   * so on. Stamped by loadActors() rather than stored in the file, so the two
+   * cannot drift. runApifyActor needs it to look up what fields this actor's
+   * response must still carry (scripts/lib/response_shape.ts); a pin that
+   * arrives without one is checked against nothing, which is why every caller
+   * goes through loadActors.
+   */
+  key?: string;
 }
 
 export interface ActorsConfig {
   profile: ActorPin;
   posts: ActorPin;
+  transcript: ActorPin;
+  tiktokSearch: ActorPin;
   tiktokPosts: ActorPin;
+  tiktokProfile: ActorPin;
+  tiktokTranscript: ActorPin;
+  instagramDiscovery: ActorPin;
+}
+
+const ACTORS_PATH = new URL("../../apify/actors.json", import.meta.url);
+
+/**
+ * Reads apify/actors.json and stamps each pin with its own key.
+ *
+ * The single entry point for actor config. Every script used to parse this
+ * file itself, which was fine while a pin was just an ID and a build number
+ * -- but the shape assertion needs to know WHICH actor it is looking at, and
+ * threading that through every call site by hand is exactly how one gets
+ * forgotten.
+ */
+export function loadActors(): ActorsConfig {
+  const raw = JSON.parse(readFileSync(ACTORS_PATH, "utf-8")) as Record<string, ActorPin>;
+  for (const [key, pin] of Object.entries(raw)) pin.key = key;
+  return raw as unknown as ActorsConfig;
 }
 
 export interface Competitor {
@@ -64,7 +96,28 @@ export async function runApifyActor(
   if (!res.ok) {
     throw new Error(`Apify actor ${pin.actorId}:${pin.build} failed: ${res.status} ${res.statusText}`);
   }
-  return (await res.json()) as Record<string, unknown>[];
+  const items = (await res.json()) as Record<string, unknown>[];
+
+  // The whole reason build="latest" is safe. A 200 with the right field
+  // names is the only evidence that matters; an exact build number was only
+  // ever a proxy for it, and a bad proxy -- build 0.0.655 of the Instagram
+  // post actor returned videoViewCount as an explicit null while the real
+  // number had moved to videoPlayCount, and 460 posts landed with no views.
+  //
+  // Hard-fails rather than warning: a renamed field makes every vpf, every
+  // baseline and every outlier score derived from it silently wrong, and
+  // wrong numbers that look finished are worse than a failed run. logFlag
+  // first so the alert survives in logs/ even though the throw stops here.
+  if (pin.key) {
+    try {
+      assertResponseShape(pin.key, pin.actorId, pin.build, items);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      logFlag("actor-shape", message, { actorKey: pin.key, actorId: pin.actorId, build: pin.build });
+      throw err;
+    }
+  }
+  return items;
 }
 
 export async function getRealMonthToDateSpendUsd(apifyToken: string): Promise<number> {
@@ -246,7 +299,7 @@ export async function harvestCompetitors(
   competitors: Competitor[],
   logLabel: string,
   logFilePrefix: string
-): Promise<number> {
+): Promise<{ totalPosts: number; accountsWithPosts: number; emptyHandles: string[] }> {
   const instagramCompetitors = competitors.filter((c) => c.platform === "instagram");
   const tiktokCompetitors = competitors.filter((c) => c.platform === "tiktok");
   const unknownPlatform = competitors.filter((c) => c.platform !== "instagram" && c.platform !== "tiktok");
@@ -264,9 +317,17 @@ export async function harvestCompetitors(
   }
 
   let totalPosts = 0;
+  // Which accounts produced nothing, so a shortfall is diagnosable from the
+  // stage log without digging through the run. Counted by ACCOUNT rather
+  // than by post: post counts vary hugely per account, so a ratio over posts
+  // would say nothing, while "20 of 23 accounts returned something" does.
+  const emptyHandles: string[] = [];
+  let accountsWithPosts = 0;
   for (const c of competitors) {
     const postCount = postCounts.get(c.competitor_id) ?? 0;
     totalPosts += postCount;
+    if (postCount > 0) accountsWithPosts += 1;
+    else emptyHandles.push(`@${c.handle}`);
     // A zero-row FULL pull (no prior last_scraped_at) almost always means
     // a broken handle or a dead actor -- flagged. A zero-row INCREMENTAL
     // pull just means nothing new posted since the watermark, which is
@@ -283,5 +344,5 @@ export async function harvestCompetitors(
     }
   }
 
-  return totalPosts;
+  return { totalPosts, accountsWithPosts, emptyHandles };
 }

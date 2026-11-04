@@ -93,6 +93,12 @@ jobs:
       # 403 "Build with number not found" and continue-on-error swallowed it.
       # There is no point running anything whose actors cannot start, and a
       # green tick on a no-op run is worse than a red one.
+      # Clears logs/run-state.json, the file each stage records into and the
+      # summary step reads. Without it a run inherits the previous run's
+      # verdicts and dependent stages skip themselves over a fixed failure.
+      - name: Start run ledger
+        run: npm run reset-run-state
+
       - name: Check pinned actor builds
         run: npm run check-actor-builds
 
@@ -130,10 +136,19 @@ jobs:
           retention-days: 90
 
       # --- content chain -------------------------------------------------
-      # Each step continues on error. A failure here should cost one stage,
-      # not the whole night: if transcription dies, the hooks that already
-      # have transcripts should still get tagged, and posts should still be
-      # written from the hooks that already exist.
+      # Each step continues on error so a failure costs one stage rather than
+      # the night. On its own that makes every run green, so the stage ledger
+      # is the other half: each script records what it expected to write
+      # against what it actually wrote, a stage whose dependency failed skips
+      # itself and says so, and the summary step at the end is what turns the
+      # run red. Dependencies are declared in scripts/lib/stage_check.ts.
+      #
+      # if: always() on the dependent steps is deliberate. The steps must
+      # still START after an upstream failure -- each one then checks the
+      # ledger itself and records "skipped due to <stage> failure", which is
+      # how a skipped stage reaches the summary instead of vanishing from it.
+      # A GitHub-level skip would leave the stage missing entirely and the
+      # run would look like it had simply not reached that work.
 
       # Instagram only. TikTok speech-to-text was measured returning EMPTY
       # on every subtitle-less video while still billing, so it is not
@@ -141,7 +156,7 @@ jobs:
       # outliers cannot quietly drain the Apify budget; the spend guard
       # inside the script is the other half of that.
       - name: Transcribe new outliers
-        if: steps.mode.outputs.value == 'content'
+        if: always() && steps.mode.outputs.value == 'content'
         continue-on-error: true
         run: npm run transcribe-outliers -- --instagram --limit=25
 
@@ -149,7 +164,7 @@ jobs:
       # rows. Filters job listings, visa/nationality content and non-English
       # before spending a model call. Anthropic cost only.
       - name: Draft hook tags
-        if: steps.mode.outputs.value == 'content'
+        if: always() && steps.mode.outputs.value == 'content'
         continue-on-error: true
         run: npm run draft-hook-tags
 
@@ -159,15 +174,34 @@ jobs:
       # faster than anyone can publish them. generate-from-analysis chains
       # into generate-formats itself.
       - name: Generate ready-made posts
-        if: steps.mode.outputs.value == 'content'
+        if: always() && steps.mode.outputs.value == 'content'
         continue-on-error: true
         run: npm run generate-from-analysis -- --count=8
 
       # Catches any draft whose chained format call failed above.
       - name: Backfill missing channel versions
-        if: steps.mode.outputs.value == 'content'
+        if: always() && steps.mode.outputs.value == 'content'
         continue-on-error: true
         run: npm run generate-formats
+
+      # --- the run's verdict ----------------------------------------------
+      # The only step that fails the job. Prints every stage's expected-vs-
+      # actual row counts, names what failed and what was skipped as a result,
+      # and exits non-zero if anything failed. Runs on always() so a run that
+      # died mid-chain still reports where it got to.
+      #
+      # Placed BEFORE the email so a failing run still sends its summary --
+      # the email reads this step's output, and a verdict nobody receives is
+      # the no-op problem again one level up.
+      # Every mode but discover: a T2/T3 run records one stage (harvest) and
+      # deserves the same verdict line as the content chain. Discover records
+      # nothing -- its deliverable is the shortlist artifact, which the upload
+      # step above already fails on if the sweep produced none.
+      - name: Stage summary
+        if: always() && steps.mode.outputs.value != 'discover'
+        id: stages
+        continue-on-error: true
+        run: npm run stage-summary
 
       # --- weekly email ---------------------------------------------------
       # Only after the content stage, so Sunday sends ONE email rather than
@@ -175,7 +209,7 @@ jobs:
       # exists for the other case -- a run that passed but produced nothing,
       # which a green tick hides and a totals-only email would too.
       - name: Build summary
-        if: steps.mode.outputs.value == 'content'
+        if: always() && steps.mode.outputs.value == 'content'
         id: summary
         continue-on-error: true
         run: |
@@ -190,7 +224,7 @@ jobs:
       # this repository is public and an address in a workflow file is a
       # published address.
       - name: Email the summary
-        if: steps.mode.outputs.value == 'content' && env.MAIL_USERNAME != ''
+        if: always() && steps.mode.outputs.value == 'content' && env.MAIL_USERNAME != ''
         continue-on-error: true
         env:
           MAIL_USERNAME: ${{ secrets.MAIL_USERNAME }}
@@ -205,6 +239,16 @@ jobs:
           to: ${{ secrets.MAIL_TO }}
           subject: "Ark intel -- weekly run ${{ job.status }}"
           body: ${{ steps.summary.outputs.body }}
+
+      # continue-on-error on the summary step above means it cannot fail the
+      # job by itself -- it is marked that way so the email still goes out
+      # after a bad run. This is what actually turns the run red, and it is
+      # the last step so the log upload below still happens.
+      - name: Fail the run if any stage failed
+        if: always() && steps.stages.outcome == 'failure'
+        run: |
+          echo "One or more stages failed their row-count check. See the Stage summary step above and the uploaded logs/ artifact."
+          exit 1
 
       # Kept whether the run passed, failed or was skipped for budget --
       # a budget skip exits 0 by design, and the log is the only record.

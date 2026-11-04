@@ -14,21 +14,13 @@
 import { readFileSync } from "node:fs";
 import "dotenv/config";
 import { getSupabaseClient } from "./lib/supabaseClient.ts";
+import { type ActorPin, type ActorsConfig, loadActors, runApifyActor } from "./lib/harvest.ts";
 
 const SMOKE_TEST_POST_CAP = 5;
 const PREFLIGHT_FRESHNESS_MS = 60 * 60 * 1000; // 1 hour
 const PREFLIGHT_STATE_PATH = new URL("../out/preflight_last_pass.json", import.meta.url);
-const ACTORS_PATH = new URL("../apify/actors.json", import.meta.url);
 
-interface ActorPin {
-  actorId: string;
-  build: string;
-}
 
-interface ActorsConfig {
-  profile: ActorPin;
-  posts: ActorPin;
-}
 
 function assertPreflightRecentlyPassed() {
   let state: { passedAt: string };
@@ -56,29 +48,6 @@ function assertPreflightRecentlyPassed() {
   }
 }
 
-async function runApifyActor(
-  pin: ActorPin,
-  input: Record<string, unknown>,
-  apifyToken: string
-): Promise<Record<string, unknown>[]> {
-  // Apify's API path form uses ~ in place of the store's / separator
-  // (e.g. "apify/instagram-profile-scraper" -> "apify~instagram-profile-scraper").
-  const pathActorId = pin.actorId.replace("/", "~");
-  const url =
-    `https://api.apify.com/v2/acts/${pathActorId}/run-sync-get-dataset-items` +
-    `?token=${apifyToken}&build=${encodeURIComponent(pin.build)}`;
-  const runRes = await fetch(url, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(input),
-  });
-  if (!runRes.ok) {
-    throw new Error(
-      `Apify actor ${pin.actorId}:${pin.build} failed: ${runRes.status} ${runRes.statusText}`
-    );
-  }
-  return (await runRes.json()) as Record<string, unknown>[];
-}
 
 async function main() {
   const handleArgIndex = process.argv.indexOf("--handle");
@@ -94,9 +63,12 @@ async function main() {
     throw new Error("APIFY_TOKEN must be set (see .env.example).");
   }
 
-  const actors: ActorsConfig = JSON.parse(readFileSync(ACTORS_PATH, "utf-8"));
+  const actors = loadActors();
   for (const [role, pin] of Object.entries(actors)) {
-    if (pin.actorId === "REPLACE_ME" || !pin.build || pin.build === "latest") {
+    // build="latest" is deliberate and expected -- see apify/actors.json's
+    // verifiedVia note and scripts/lib/response_shape.ts. What is still
+    // unacceptable is an unconfigured actor or a missing build value.
+    if (pin.actorId === "REPLACE_ME" || !pin.build) {
       throw new Error(
         `apify/actors.json's "${role}" entry is not properly pinned (actorId/build). ` +
           "Pin a real actor ID and exact build before running smoke_test.ts " +

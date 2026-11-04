@@ -12,6 +12,10 @@ __pycache__/
 competitor-pipeline/node_modules/
 competitor-pipeline/dist/
 competitor-pipeline/logs/*.log
+# Per-run stage ledger: transient state rebuilt at the start of every run
+# (npm run reset-run-state), not source. Committing it would hand the next
+# run last week's verdicts.
+competitor-pipeline/logs/run-state.json
 competitor-pipeline/out/*
 # ...except the monthly hook report itself -- a real deliverable (read by a
 # designer/content producer), not a transient scratch/debug artifact like

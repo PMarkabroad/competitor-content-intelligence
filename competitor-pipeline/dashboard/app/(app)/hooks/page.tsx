@@ -17,6 +17,13 @@ interface HookRow {
   opening_line: string | null;
   outlier_score: number | null;
   brand_fit: string | null;
+  // Added with the carousel chain (migration 019). A carousel hook is a
+  // written first line scored on engagement per follower; a video hook is a
+  // spoken line scored on views per follower. Both scores say "this many
+  // times its own account's normal", which is why they sit in one list --
+  // but the reader has to be able to see which is which, because the craft
+  // advice differs: a carousel opener has to earn a swipe, not a watch.
+  media_kind: string | null;
   competitors: { name: string; market: string } | null;
 }
 
@@ -47,7 +54,7 @@ export default async function HooksPage({
 
   const { data, error } = await supabase
     .from("hook_library")
-    .select("hook_id, post_id, hook_pattern, opening_line, outlier_score, brand_fit, competitors(name, market)")
+    .select("hook_id, post_id, hook_pattern, opening_line, outlier_score, brand_fit, media_kind, competitors(name, market)")
     .order("outlier_score", { ascending: false });
   if (error) throw new Error(`Failed to load hook_library: ${error.message}`);
 
@@ -117,6 +124,7 @@ export default async function HooksPage({
                 <span className="mt-1 block text-[11px] text-faint">
                   {row.competitors?.name ?? "unknown"} · {row.competitors?.market ?? "—"}
                   {row.hook_pattern ? ` · ${row.hook_pattern.replace(/_/g, " ")}` : ""}
+                  {row.media_kind === "carousel" ? " · carousel, first line" : ""}
                 </span>
               </span>
             </a>

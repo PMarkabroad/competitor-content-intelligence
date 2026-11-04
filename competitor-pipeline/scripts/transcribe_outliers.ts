@@ -57,13 +57,12 @@
  */
 
 import "dotenv/config";
-import { readFileSync } from "node:fs";
 import { config } from "../config.ts";
 import { getSupabaseClient } from "./lib/supabaseClient.ts";
+import { recordStage, canRunStage } from "./lib/stage_check.ts";
 import { ingestTranscript } from "./ingest.ts";
-import { runApifyActor, getRealMonthToDateSpendUsd, logFlag } from "./lib/harvest.ts";
+import { loadActors, runApifyActor, getRealMonthToDateSpendUsd, logFlag } from "./lib/harvest.ts";
 
-const ACTORS_PATH = new URL("../apify/actors.json", import.meta.url);
 
 // BRONZE-tier charges, confirmed live via the actor's pricingInfos
 // (2026-08-26/31): a flat "Video" event on every returned video, plus an
@@ -145,6 +144,11 @@ async function fetchTranscriptText(
 }
 
 async function main() {
+  // Transcription reads this run's fresh posts, so a harvest that wrote
+  // nothing or only part of its accounts would silently narrow the outlier
+  // set. Skipping is recorded in the ledger, not treated as a pass.
+  if (!canRunStage("transcription")) return;
+
   // "--limit=" (equals-sign style), matching discover.ts's convention --
   // NOT a separate "--limit N" token, which npm's "--" passthrough doesn't
   // require and this codebase doesn't use anywhere else. A first version
@@ -167,7 +171,7 @@ async function main() {
   if (!apifyToken) throw new Error("APIFY_TOKEN must be set.");
 
   const supabase = getSupabaseClient();
-  const actors = JSON.parse(readFileSync(ACTORS_PATH, "utf-8"));
+  const actors = loadActors();
   const pin = actors.tiktokTranscript;
 
   const { data: outliers, error } = await supabase
@@ -370,6 +374,17 @@ async function main() {
   } catch (err) {
     console.log(`\nDone (${mode}). ${transcribed} transcribed, ${noCaptions} empty, ${failed} failed. (Could not fetch final spend total: ${err instanceof Error ? err.message : String(err)})`);
   }
+
+  // min_ratio 0.5: empty returns are normal and measured here -- TikTok
+  // speech-to-text comes back empty on every subtitle-less video, and some
+  // outliers are carousels with no audio at all. Below half, something is
+  // wrong with the actor rather than with the videos.
+  recordStage({
+    stage: "transcription",
+    expected: targets.length,
+    actual: transcribed,
+    detail: `${noCaptions} empty, ${failed} failed`,
+  });
 }
 
 main().catch((err) => {

@@ -24,6 +24,7 @@ const PRIMARY_LINKS: { href: string; label: string }[] = [
   { href: "/content-ideas", label: "Content ideas" },
   { href: "/hooks", label: "Hook library" },
   { href: "/formats", label: "Formats they use" },
+  { href: "/carousels", label: "Carousels" },
   { href: "/drafts", label: "Ready-made posts" },
 ];
 

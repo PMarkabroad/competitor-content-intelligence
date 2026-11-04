@@ -31,6 +31,7 @@ import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { getSupabaseClient } from "./lib/supabaseClient.ts";
 import { isOffBusinessSubject, subjectScope } from "./lib/subject_scope.ts";
+import { recordStage, canRunStage } from "./lib/stage_check.ts";
 
 const BUSINESS_DEF_PATH = new URL("../reference/business-definition.md", import.meta.url);
 const SKILL_DIR = new URL("../reference/arkabroad-voice-skill/", import.meta.url);
@@ -72,6 +73,10 @@ function buildVoiceGuide(): string {
 }
 
 async function main() {
+  // Drafts are built from the hook library, so tagging having failed means
+  // writing this week's posts from last week's hooks while looking current.
+  if (!canRunStage("drafts")) return;
+
   const count = Number(arg("count") ?? 5);
   // Posts per API call. Five fits comfortably inside max_tokens alongside
   // adaptive thinking; 25 did not.
@@ -321,6 +326,17 @@ Exactly ${BATCH_SIZE} objects. Every object's "market" is "AU" -- Ark serves Aus
   }
 
   console.log(`\nSaved ${saved} analysis-derived post(s). They're on /drafts.`);
+
+  // min_ratio 0.9: an occasional model call failing or a batch coming back
+  // unparseable should not kill the run, and the ones that failed are logged
+  // above. Recorded BEFORE the chained expansion below so generate-formats,
+  // which runs as its own process, can see whether drafts succeeded.
+  const draftsOk = recordStage({
+    stage: "drafts",
+    expected: count,
+    actual: saved,
+  });
+  if (!draftsOk) return;
 
   // Channel versions are generated here rather than left as a step someone
   // has to remember. A draft with no LinkedIn or carousel version still has

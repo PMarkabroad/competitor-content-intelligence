@@ -26,12 +26,10 @@
  */
 
 import "dotenv/config";
-import { readFileSync } from "node:fs";
 import { config } from "../config.ts";
 import { getSupabaseClient } from "./lib/supabaseClient.ts";
-import { runApifyActor, getRealMonthToDateSpendUsd } from "./lib/harvest.ts";
+import { loadActors, runApifyActor, getRealMonthToDateSpendUsd } from "./lib/harvest.ts";
 
-const ACTORS_PATH = new URL("../apify/actors.json", import.meta.url);
 
 // BRONZE "Result" event, confirmed live via the actor's pricingInfos
 // 2026-09-03. Minimum per run is $0.0026, i.e. effectively none.
@@ -108,7 +106,7 @@ async function main() {
     return;
   }
 
-  const actors = JSON.parse(readFileSync(ACTORS_PATH, "utf-8"));
+  const actors = loadActors();
   const pin = actors.instagramDiscovery;
   const supabase = getSupabaseClient();
 

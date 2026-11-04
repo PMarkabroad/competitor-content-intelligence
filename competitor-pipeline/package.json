@@ -37,7 +37,9 @@
     "backup-competitor-data": "tsx scripts/backup_competitor_data.ts",
     "seed-competitors": "tsx scripts/seed_competitors.ts",
     "archive-backup": "tsx scripts/archive_backup_to_db.ts",
-    "check-scoring-inputs": "tsx scripts/check_scoring_inputs.ts"
+    "check-scoring-inputs": "tsx scripts/check_scoring_inputs.ts",
+    "reset-run-state": "tsx scripts/reset_run_state.ts",
+    "stage-summary": "tsx scripts/stage_summary.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.120.0",

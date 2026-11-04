@@ -16,6 +16,15 @@ export interface Shape {
   name: string;
   blurb: string;
   test: RegExp;
+  /**
+   * The shape works by gating a resource behind a comment or DM, which
+   * inflates comment counts by an order of magnitude. Flagged here so the
+   * carousel score (which detects the same device in CAPTIONS) and this
+   * shape (which detects it in STRUCTURE) stay one concept. Measured on the
+   * current roster: comment-gated posts run a 34.8% comment-to-like ratio
+   * against 2.4% for everything else.
+   */
+  commentGated?: boolean;
 }
 
 // Ordered: first match wins, so more specific shapes come first. Countdown
@@ -32,6 +41,31 @@ export const SHAPES: Shape[] = [
     name: "Countdown",
     blurb: "Counts down to number one and holds it back, usually pushing people into the comments for it.",
     test: /countdown|\b\d+\s*to\s*1\b|withheld for comments|#1 withheld/i,
+  },
+  {
+    // Added 2026-11-04. Five of the ten unclassified structures on the new
+    // roster were this shape, which the vocabulary -- written for career
+    // coaches -- had never seen. It sits above Numbered list because
+    // "periodic results drop -> two numbered trends" would otherwise be
+    // swallowed by the list rule.
+    name: "News or deadline",
+    blurb:
+      "A rule change announced as news: what changed, from when, who it hits, and what to do before the date.",
+    test:
+      /\bnews flag\b|\balarm(ed)?\s*(opener)?\b|rule change|what changes|previously\s+\w+\s*->\s*now|grandfather clause|hard deadline|act now|eligibility checklist|results drop|effective (from|date)|\bas of\b/i,
+  },
+  {
+    // The other five. Distinct from Countdown: Countdown withholds ONE item
+    // to drive comments, whereas this promises a whole resource and gates it
+    // behind a comment or DM. commentGated marks it so the carousel score's
+    // comment-bait handling and this shape stay one concept rather than two
+    // implementations that drift apart.
+    name: "Lead magnet",
+    blurb:
+      "Promises a resource -- template, list, guide -- and gates it behind a comment or a DM rather than giving it away.",
+    test:
+      /comment-gated|comment gated|lead magnet|comment-your-\w+|comment your \w+|\bDM offer\b|DM me the|resource list|comment-gated (resource|templates?|lead magnet)/i,
+    commentGated: true,
   },
   {
     name: "Numbered list",
@@ -88,4 +122,16 @@ export function cleanText(s: string | null | undefined): string | null {
   if (!s) return null;
   const t = s.trim();
   return !t || t.toLowerCase() === "null" ? null : t;
+}
+
+/**
+ * Does this structure use a comment-or-DM gate? True for the Lead magnet
+ * shape. Engagement on these posts is not comparable to organic engagement,
+ * so any ranking that weights comments must know.
+ */
+export function isCommentGated(narrativeStructure: string | null | undefined): boolean {
+  const text = String(narrativeStructure ?? "");
+  if (!text.trim()) return false;
+  const shape = SHAPES.find((s) => s.test.test(text));
+  return shape?.commentGated === true;
 }

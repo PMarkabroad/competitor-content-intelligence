@@ -22,6 +22,7 @@
 import "dotenv/config";
 import { readFileSync } from "node:fs";
 import { getSupabaseClient } from "./lib/supabaseClient.ts";
+import { recordStage, canRunStage } from "./lib/stage_check.ts";
 
 const VOICE_DOC_PATH = new URL("../reference/arkabroad-voice.md", import.meta.url);
 const BUSINESS_DEF_PATH = new URL("../reference/business-definition.md", import.meta.url);
@@ -212,6 +213,9 @@ function parseVariants(raw: string): Variant[] {
 }
 
 async function main() {
+  // Nothing to expand if the drafts were never written.
+  if (!canRunStage("channel_formats")) return;
+
   const limitArg = arg("limit");
   const limit = limitArg ? Number(limitArg) : null;
   const regenerate = process.argv.includes("--regenerate");
@@ -385,6 +389,16 @@ ${specSheet}`;
   }
 
   console.log(`\n${written} channel version(s) written across ${batch.length - failed} draft(s). ${failed} failed.`);
+
+  // Measured in DRAFTS, not channel rows: nine versions of one draft is one
+  // unit of work here, and counting rows would let a single draft expanding
+  // nine ways mask eight drafts that got nothing.
+  recordStage({
+    stage: "channel_formats",
+    expected: batch.length,
+    actual: batch.length - failed,
+    detail: `${written} channel version(s)`,
+  });
 }
 
 main().catch((err) => {

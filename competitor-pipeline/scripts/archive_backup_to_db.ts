@@ -26,6 +26,7 @@ import { execFileSync } from "node:child_process";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { recordStage } from "./lib/stage_check.ts";
 
 const TABLES = [
   "competitors",
@@ -159,16 +160,23 @@ async function main() {
   }
 
   const summary: Record<string, number> = {};
+  // Totals across every table, for the one stage check at the end.
+  // min_ratio is 1.0 for this stage: a partial copy is a broken backup, and
+  // a backup is the one thing that cannot be 'mostly there'.
+  let expectedRows = 0;
+  let archivedRows = 0;
 
   for (const table of TABLES) {
     const rows = JSON.parse(readFileSync(join(backupDir, `${table}.json`), "utf-8")) as Record<string, unknown>[];
     const target = `archive.${table}_${stamp.replace(/-/g, "_")}`;
+    expectedRows += rows.length;
 
     // Resumable: a table already holding the right number of rows is left
     // alone, so a 413 partway through does not mean starting over.
     if (alreadyDone.get(`${table}_${stamp.replace(/-/g, "_")}`) === rows.length) {
       summary[table] = rows.length;
       console.log(`  ok  ${table.padEnd(24)} ${rows.length} rows (already archived, skipped)`);
+      archivedRows += rows.length;
       continue;
     }
 
@@ -223,6 +231,7 @@ async function main() {
 
     summary[table] = written;
     console.log(`  ${written === rows.length ? "ok " : "FAIL"} ${table.padEnd(24)} ${written} of ${rows.length} rows`);
+    archivedRows += written;
   }
 
   console.log("\nVerifying row counts in the archive schema...");
@@ -236,6 +245,13 @@ async function main() {
     JSON.stringify({ archived_at: new Date().toISOString(), schema: "archive", suffix: stamp, tables: summary }, null, 2)
   );
   console.log(`\nDone. Archive schema: archive.<table>_${stamp.replace(/-/g, "_")}`);
+
+  recordStage({
+    stage: "archive",
+    expected: expectedRows,
+    actual: archivedRows,
+    detail: `${TABLES.length} table(s)`,
+  });
 }
 
 main().catch((err) => {

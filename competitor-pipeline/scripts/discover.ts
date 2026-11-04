@@ -54,33 +54,13 @@ import { parse } from "csv-parse/sync";
 import "dotenv/config";
 import { config } from "../config.ts";
 import { getSupabaseClient } from "./lib/supabaseClient.ts";
-import { getRealMonthToDateSpendUsd } from "./lib/harvest.ts";
+import { type ActorPin, loadActors, runApifyActor, getRealMonthToDateSpendUsd } from "./lib/harvest.ts";
 
-const ACTORS_PATH = new URL("../apify/actors.json", import.meta.url);
 const SEED_QUERIES_PATH = new URL("../discovery/seed_queries.json", import.meta.url);
 const OUT_DIR = new URL("../out/", import.meta.url);
 
 type Market = "AU" | "CA" | "US";
 
-interface ActorPin {
-  actorId: string;
-  build: string;
-}
-
-interface ActorsConfig {
-  tiktokSearch: ActorPin;
-  tiktokPosts: ActorPin;
-  tiktokProfile: ActorPin;
-  // Instagram candidates come from discover_instagram.ts and are profiled
-  // and gated with Instagram's own actors -- the TikTok ones return
-  // nothing for them.
-  profile: ActorPin;
-  posts: ActorPin;
-}
-
-function loadActors(): ActorsConfig {
-  return JSON.parse(readFileSync(ACTORS_PATH, "utf-8"));
-}
 
 function loadSeedQueries(): Record<Market, string[]> {
   const raw = JSON.parse(readFileSync(SEED_QUERIES_PATH, "utf-8"));
@@ -94,25 +74,6 @@ function loadSeedQueries(): Record<Market, string[]> {
   return markets as Record<Market, string[]>;
 }
 
-async function runApifyActor(
-  pin: ActorPin,
-  input: Record<string, unknown>,
-  apifyToken: string
-): Promise<Record<string, unknown>[]> {
-  const pathActorId = pin.actorId.replace("/", "~");
-  const url =
-    `https://api.apify.com/v2/acts/${pathActorId}/run-sync-get-dataset-items` +
-    `?token=${apifyToken}&build=${encodeURIComponent(pin.build)}`;
-  const res = await fetch(url, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(input),
-  });
-  if (!res.ok) {
-    throw new Error(`Apify actor ${pin.actorId}:${pin.build} failed: ${res.status} ${res.statusText}`);
-  }
-  return (await res.json()) as Record<string, unknown>[];
-}
 
 // Band floors are per-platform and NOT interchangeable. TikTok view
 // counts include passive feed-scroll impressions, so its vpf runs roughly

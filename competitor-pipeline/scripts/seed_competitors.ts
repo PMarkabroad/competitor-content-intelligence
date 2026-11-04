@@ -23,10 +23,9 @@
  */
 
 import "dotenv/config";
-import { readFileSync } from "node:fs";
 import { getSupabaseClient } from "./lib/supabaseClient.ts";
+import { loadActors } from "./lib/harvest.ts";
 
-const ACTORS_PATH = new URL("../apify/actors.json", import.meta.url);
 
 const VIRAL_CREATOR = [
   "psych.actually",
@@ -72,7 +71,7 @@ async function main() {
   const token = process.env.APIFY_TOKEN;
   if (!token) throw new Error("APIFY_TOKEN must be set.");
 
-  const actors = JSON.parse(readFileSync(ACTORS_PATH, "utf-8")) as Record<string, { actorId: string; build: string }>;
+  const actors = loadActors();
   const pin = actors.profile;
 
   const planned: { handle: string; category: Resolved["category"] }[] = [

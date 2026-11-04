@@ -91,7 +91,7 @@ function checkActorsPinned(): CheckResult {
     json = JSON.parse(readFileSync(ACTORS_PATH, "utf-8"));
   } catch (err) {
     return {
-      name: "actors.json has no REPLACE_ME and every actor ID is version-pinned",
+      name: "actors.json has no REPLACE_ME and every actor declares a build",
       pass: false,
       detail: `Could not read/parse actors.json: ${err instanceof Error ? err.message : String(err)}`,
     };
@@ -104,17 +104,29 @@ function checkActorsPinned(): CheckResult {
       problems.push(`${role}: actorId is still REPLACE_ME`);
       continue;
     }
-    // Pin shape is {actorId, build} (build = an explicit Apify build number
-    // like "0.0.587"), not a colon-embedded version string. "latest" is
-    // never acceptable as the build value -- it floats to whatever the
-    // actor's newest build is at call time.
-    if (!entry.build || entry.build === "latest") {
-      problems.push(`${role}: build is missing or "latest" (actorId "${actorId}")`);
+    // Pin shape is {actorId, build}, not a colon-embedded version string.
+    //
+    // "latest" IS acceptable here, and is now what every actor carries. This
+    // check used to reject it, on the reasoning that a floating tag drifts to
+    // whatever the newest build is at call time. That reasoning held right up
+    // until it met Apify's build retention: exact pins died three times in six
+    // weeks (26 Sep, 4 Oct, 4 Nov) because old builds are deleted on a short
+    // rolling window, once about an hour after this very check called one
+    // "ok". A pin that cannot survive the week is not stability.
+    //
+    // Drift is now caught where it actually shows up -- in the response.
+    // scripts/lib/response_shape.ts asserts on every call that the fields
+    // this pipeline reads are still there and still non-null, and hard-fails
+    // naming the actor and the field if not. So what must be true here is
+    // only that a build is declared at all; an empty string would make the
+    // run URL request build="" and fail obscurely.
+    if (!entry.build) {
+      problems.push(`${role}: build is missing (actorId "${actorId}")`);
     }
   }
 
   return {
-    name: "actors.json has no REPLACE_ME and every actor ID is version-pinned",
+    name: "actors.json has no REPLACE_ME and every actor declares a build",
     pass: problems.length === 0,
     detail: problems.length === 0 ? "ok" : problems.join("; "),
   };

@@ -26,17 +26,17 @@
 import "dotenv/config";
 import { config } from "../config.ts";
 import { getSupabaseClient } from "./lib/supabaseClient.ts";
+import { recordStage } from "./lib/stage_check.ts";
 import {
-  type ActorsConfig,
   type Competitor,
   type Tier,
   logFlag,
+  loadActors,
   getRealMonthToDateSpendUsd,
   estimateRunCostUsd,
   harvestCompetitors,
 } from "./lib/harvest.ts";
 
-const ACTORS_PATH = new URL("../apify/actors.json", import.meta.url);
 
 async function main() {
   const tierArgIndex = process.argv.indexOf("--tier");
@@ -55,8 +55,7 @@ async function main() {
   if (!apifyToken) throw new Error("APIFY_TOKEN must be set.");
 
   const supabase = getSupabaseClient();
-  const { readFileSync } = await import("node:fs");
-  const actors = JSON.parse(readFileSync(ACTORS_PATH, "utf-8")) as ActorsConfig;
+  const actors = loadActors();
 
   // No market allowlist here -- `active=true` is what actually scopes
   // this, and it's the correct single source of truth. A hardcoded
@@ -97,10 +96,23 @@ async function main() {
     return; // skip, not fail -- exit 0
   }
 
-  const totalPosts = await harvestCompetitors(supabase, actors, apifyToken, competitors, `Scheduled ${label}`, "scheduled-harvest");
+  const { totalPosts, accountsWithPosts, emptyHandles } = await harvestCompetitors(supabase, actors, apifyToken, competitors, `Scheduled ${label}`, "scheduled-harvest");
 
   const spentAfter = await getRealMonthToDateSpendUsd(apifyToken);
   console.log(`\n[${tier}] Harvest complete. ${totalPosts} total post row(s) across ${competitors.length} competitor(s). Real spend now: $${spentAfter.toFixed(4)} / $${cap}.`);
+
+  // Measured by ACCOUNT, not by post. Post counts vary hugely per account,
+  // so a ratio over posts would say nothing, while "20 of 23 accounts
+  // returned something" is exactly the health question. min_ratio 0.9 lets
+  // one or two go private or get rate-limited without failing the night; the
+  // ones that produced nothing are named in the log.
+  recordStage({
+    stage: "harvest",
+    expected: competitors.length,
+    actual: accountsWithPosts,
+    emptyItems: emptyHandles,
+    detail: `${totalPosts} post row(s)`,
+  });
 }
 
 main().catch((err) => {

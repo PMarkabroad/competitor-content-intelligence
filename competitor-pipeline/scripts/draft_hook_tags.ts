@@ -40,6 +40,7 @@
 import "dotenv/config";
 import { readFileSync } from "node:fs";
 import { getSupabaseClient } from "./lib/supabaseClient.ts";
+import { recordStage, canRunStage } from "./lib/stage_check.ts";
 import { nonEnglishReason } from "./lib/language.ts";
 
 const VOICE_DOC_PATH = new URL("../reference/arkabroad-voice.md", import.meta.url);
@@ -81,6 +82,11 @@ interface Candidate {
   // Where the hook text came from. Recorded because the two are not equally
   // trustworthy and a reader of the library needs to be able to tell.
   source: "transcript" | "caption";
+  // Which medium produced it. A carousel hook is the caption's first line --
+  // a written opening slide -- and a video hook is a spoken one. They are
+  // both hooks, but comparing their scores means comparing engagement per
+  // follower with views per follower, so the rankings keep them apart.
+  media_kind: "video" | "carousel";
 }
 
 interface DraftTag {
@@ -263,10 +269,38 @@ function clean(value: unknown): string | null {
   return t.length > 0 ? t : null;
 }
 
+/**
+ * A carousel's hook: the opening line of its caption.
+ *
+ * Not the whole caption. On a carousel the first line is what shows above
+ * the fold next to the cover slide and decides whether anyone swipes; the
+ * rest is the body that follows. Tagging the body would describe the
+ * argument rather than the opening.
+ *
+ * Takes a second line when the first is too short to be a hook on its own.
+ * Real captions on this roster open with an emoji row, a flag pair, or a
+ * "Part 2/10" marker, and stopping there would file a line of emoji as
+ * somebody's hook.
+ */
+function firstLine(caption: string | null | undefined): string {
+  const lines = String(caption ?? "")
+    .split("\n")
+    .map((l) => l.trim())
+    .filter((l) => l.length > 0);
+  if (lines.length === 0) return "";
+  const first = lines[0];
+  return first.length >= 25 || lines.length === 1 ? first : `${first} ${lines[1]}`.trim();
+}
+
 async function main() {
   const limitArg = process.argv.find((a) => a.startsWith("--limit="));
   const limit = limitArg ? Number(limitArg.slice("--limit=".length)) : null;
   const dryRun = process.argv.includes("--dry-run");
+
+  // Tagging consumes this run's transcripts, so a failed transcription stage
+  // would quietly tag a fraction of the hooks and look finished. A dry run is
+  // a manual diagnostic and writes nothing, so it is never blocked.
+  if (!dryRun && !canRunStage("hook_tagging")) return;
 
   const anthropicApiKey = process.env.ANTHROPIC_API_KEY;
   if (!anthropicApiKey) throw new Error("ANTHROPIC_API_KEY must be set.");
@@ -325,8 +359,45 @@ async function main() {
     )
     .map((p) => p.post_id);
 
-  const captionSourced = new Set(captionPendingIds);
-  const pendingIds = [...transcriptPendingIds, ...captionPendingIds];
+  // Carousels, from the separate carousel chain (migration 019). Instagram
+  // reports no view count for a Sidecar post, so none of these could ever
+  // enter v_outliers -- 264 of the roster's 1,342 posts were invisible to
+  // every ranking, not scoring badly. v_carousel_outliers scores them on
+  // engagement per follower against their own account's carousel median.
+  //
+  // The hook is the caption's FIRST LINE, which for a carousel is the text
+  // on the opening slide's worth of attention -- the thing that decides
+  // whether anyone swipes. That is the opposite of the Instagram-reel case
+  // warned about above, where the caption is bait and the real hook is
+  // spoken: a carousel has nothing spoken at all.
+  const { data: carouselRows } = await supabase
+    .from("v_carousel_outliers")
+    .select("post_id, competitor_id, carousel_score, comment_bait");
+  // A carousel with no caption has no hook to read. Four of the first
+  // thirteen were exactly that -- image-only posts that still scored -- and
+  // one reached the model before this filter existed, which dutifully tagged
+  // it "unknown - no transcript or caption" and filed it. Dropped here
+  // rather than later so no model call is spent on them.
+  const { data: carouselCaptionRows } = await supabase
+    .from("competitor_posts")
+    .select("post_id, caption")
+    .in("post_id", (carouselRows ?? []).map((r) => r.post_id));
+  const captionByCarousel = new Map(
+    (carouselCaptionRows ?? []).map((p) => [p.post_id, p.caption as string | null])
+  );
+  const carouselPending = (carouselRows ?? [])
+    .filter((r) => !taggedIds.has(r.post_id))
+    .filter((r) => firstLine(captionByCarousel.get(r.post_id)).length > 0);
+  const carouselNoCaption =
+    (carouselRows ?? []).filter((r) => !taggedIds.has(r.post_id)).length - carouselPending.length;
+  const carouselScoreByPost = new Map(
+    carouselPending.map((r) => [r.post_id, r.carousel_score as number | null])
+  );
+  const carouselPendingIds = carouselPending.map((r) => r.post_id);
+
+  const captionSourced = new Set([...captionPendingIds, ...carouselPendingIds]);
+  const carouselSourced = new Set(carouselPendingIds);
+  const pendingIds = [...transcriptPendingIds, ...captionPendingIds, ...carouselPendingIds];
 
   if (pendingIds.length === 0) {
     console.log("Every transcript already has a hook_library row. Nothing to draft.");
@@ -334,8 +405,12 @@ async function main() {
   }
   console.log(
     `${transcriptPendingIds.length} from transcripts, ${captionPendingIds.length} from captions ` +
-      `(TikTok <=${CAPTION_MAX_SECONDS}s, where the caption is the whole hook).`
+      `(TikTok <=${CAPTION_MAX_SECONDS}s, where the caption is the whole hook), ` +
+      `${carouselPendingIds.length} from carousels (caption first line).`
   );
+  if (carouselNoCaption > 0) {
+    console.log(`Skipped ${carouselNoCaption} carousel(s) with no caption -- nothing to read a hook from.`);
+  }
 
   const { data: posts, error: pErr } = await supabase
     .from("competitor_posts")
@@ -378,7 +453,16 @@ async function main() {
     // No baseline means no DEFINED relative score (too few scoreable posts,
     // or a non-scoreable tier -- T1 is excluded from scoring by design), so
     // it stays null rather than being invented.
-    const outlierScore = vpf != null && median && median > 0 ? vpf / median : null;
+    const isCarousel = carouselSourced.has(p.post_id);
+    // A carousel has no vpf, so its relative score comes from the carousel
+    // chain instead. Both answer the same question -- how far clear of this
+    // account's own normal did this post get -- in the unit each medium
+    // actually reports.
+    const outlierScore = isCarousel
+      ? carouselScoreByPost.get(p.post_id) ?? null
+      : vpf != null && median && median > 0
+        ? vpf / median
+        : null;
     return {
       post_id: p.post_id,
       competitor_id: p.competitor_id,
@@ -388,8 +472,20 @@ async function main() {
       // For a caption-sourced row the caption IS the spoken line, so it is
       // passed as the transcript rather than left blank -- the model is
       // being asked the same question either way.
-      transcript: transcriptByPost.get(p.post_id) ?? (captionSourced.has(p.post_id) ? String(p.caption ?? "") : ""),
+      // For a carousel, only the FIRST LINE is the hook -- the rest of the
+      // caption is the body that follows the swipe, and feeding all of it in
+      // would have the model tagging the argument rather than the opening.
+      // For a short TikTok the caption IS the spoken line, so it goes in
+      // whole.
+      transcript:
+        transcriptByPost.get(p.post_id) ??
+        (isCarousel
+          ? firstLine(p.caption)
+          : captionSourced.has(p.post_id)
+            ? String(p.caption ?? "")
+            : ""),
       source: captionSourced.has(p.post_id) ? "caption" : "transcript",
+      media_kind: isCarousel ? "carousel" : "video",
       outlier_score: outlierScore,
       vpf,
       duration_seconds: p.duration_seconds,
@@ -437,7 +533,12 @@ async function main() {
   // Spanish sometimes writes an English caption, and it is the spoken words
   // that become the hook.
   const beforeLang = candidates.length;
-  candidates = candidates.filter((c) => !nonEnglishReason(c.transcript || c.caption || ""));
+  // Judged on the FULL caption for a carousel, not on the one line kept as
+  // its hook: a single short line is thin evidence of language, and the
+  // rest of the caption is right there.
+  candidates = candidates.filter(
+    (c) => !nonEnglishReason(c.media_kind === "carousel" ? c.caption || "" : c.transcript || c.caption || "")
+  );
   const skippedLanguage = beforeLang - candidates.length;
 
   candidates.sort((a, b) => (b.outlier_score ?? 0) - (a.outlier_score ?? 0));
@@ -447,11 +548,12 @@ async function main() {
     console.log(`Skipped ${skippedListings} job-listing post(s) -- vacancy read-outs carry no hook craft and Ark doesn't post job boards.`);
   }
   if (skippedNationality > 0) {
-  if (skippedLanguage > 0)
-    console.log(`Skipped ${skippedLanguage} non-English post(s) -- Ark publishes in English to a reader in Australia.`);
     console.log(`Skipped ${skippedNationality} nationality-ranking / visa post(s) -- Never-ships item 2 and the regulated-activity rule.`);
   }
-  console.log(`Drafting hook tags for ${candidates.length} transcribed post(s) in batches of ${BATCH_SIZE}.`);
+  if (skippedLanguage > 0) {
+    console.log(`Skipped ${skippedLanguage} non-English post(s) -- Ark publishes in English to a reader in Australia.`);
+  }
+  console.log(`Drafting hook tags for ${candidates.length} post(s) in batches of ${BATCH_SIZE}.`);
   console.log(`Anthropic API only -- no Apify spend. why_it_performed is left NULL for a human.${dryRun ? " (DRY RUN, nothing will be written)" : ""}\n`);
 
   const { default: Anthropic } = await import("@anthropic-ai/sdk");
@@ -495,6 +597,11 @@ async function main() {
           // Distinguishable from a transcript-derived row on sight: a
           // caption-derived hook is the posted caption, not what was said.
           tagged_by: c.source === "caption" ? "claude-code-draft-caption" : "claude-code-draft",
+          // Added by migration 019. Without these, a ranking cannot tell a
+          // written opening slide from a spoken opening line, and would put
+          // engagement-per-follower and views-per-follower in one column.
+          media_kind: c.media_kind,
+          source: c.source,
         };
 
         if (dryRun) {
@@ -518,6 +625,19 @@ async function main() {
   }
 
   console.log(`\nDone. ${written} row(s) ${dryRun ? "would be written" : "written"}, ${failedBatches} batch(es) failed.`);
+
+  // min_ratio 0.8: the content filters (job listings, visa/nationality,
+  // non-English) legitimately drop a fifth of the input before the model is
+  // ever called, so a shortfall of that size is the filters working rather
+  // than a fault. A dry run writes nothing by design and is not recorded.
+  if (!dryRun) {
+    recordStage({
+      stage: "hook_tagging",
+      expected: candidates.length,
+      actual: written,
+      detail: `${failedBatches} batch(es) failed`,
+    });
+  }
   if (!dryRun && written > 0) {
     console.log(`All have why_it_performed = NULL and tagged_by = 'claude-code-draft' -- that's the human's half.`);
   }

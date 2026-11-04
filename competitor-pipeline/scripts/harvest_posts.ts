@@ -15,43 +15,16 @@
 
 import "dotenv/config";
 import { getSupabaseClient } from "./lib/supabaseClient.ts";
+import { type ActorPin, loadActors, runApifyActor } from "./lib/harvest.ts";
 
-interface ActorPin {
-  actorId: string;
-  build: string;
-}
 
-const ACTORS_PATH = new URL("../apify/actors.json", import.meta.url);
 
-async function runApifyActor(
-  pin: ActorPin,
-  input: Record<string, unknown>,
-  apifyToken: string
-): Promise<Record<string, unknown>[]> {
-  const pathActorId = pin.actorId.replace("/", "~");
-  const url =
-    `https://api.apify.com/v2/acts/${pathActorId}/run-sync-get-dataset-items` +
-    `?token=${apifyToken}&build=${encodeURIComponent(pin.build)}`;
-  const res = await fetch(url, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(input),
-  });
-  if (!res.ok) {
-    throw new Error(`Apify actor ${pin.actorId}:${pin.build} failed: ${res.status} ${res.statusText}`);
-  }
-  return (await res.json()) as Record<string, unknown>[];
-}
 
 async function main() {
   const apifyToken = process.env.APIFY_TOKEN;
   if (!apifyToken) throw new Error("APIFY_TOKEN must be set.");
 
-  const { readFileSync } = await import("node:fs");
-  const actors = JSON.parse(readFileSync(ACTORS_PATH, "utf-8")) as {
-    profile: ActorPin;
-    posts: ActorPin;
-  };
+  const actors = loadActors();
 
   const supabase = getSupabaseClient();
   const { ingestProfile, ingestPost } = await import("./ingest.ts");

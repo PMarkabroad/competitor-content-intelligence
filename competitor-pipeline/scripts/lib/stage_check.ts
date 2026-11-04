@@ -2,17 +2,22 @@
  * "Did this stage actually write anything?" -- plus what to skip when it
  * didn't.
  *
- * Exit code 0 is not evidence of work. This project has produced two
- * silently-successful no-ops: the 26 September discovery sweep reported
- * SUCCESS while every actor returned 403 build-not-found, and the archive
- * copy created its tables, hit a 413 on the first insert, and left empty
- * tables behind looking finished. Both were found days later by someone
- * happening to check a row count.
+ * Exit code 0 is not evidence of work. This project produced three
+ * silently-successful no-ops in six weeks: the 26 September discovery sweep
+ * reported SUCCESS while every actor returned 403 build-not-found; the
+ * archive copy created its tables, hit a 413 on the first insert and left
+ * them empty looking finished; and a harvest collected 460 posts with every
+ * view count null, so nothing downstream could score. Each was found days
+ * later by someone happening to check a row count.
  *
  * Every stage now declares what it expected to write and what it actually
- * wrote, fails loudly when those disagree, and -- because a failed harvest
- * must not produce drafts from stale data -- declares what depends on it.
+ * wrote, fails loudly when those disagree, and declares what depends on it
+ * -- because drafts built on a partial harvest are worse than no drafts:
+ * they look finished and are quietly wrong.
  */
+
+import { mkdirSync, readFileSync, writeFileSync, existsSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 
 /** A stage, and the stage it cannot run without. */
 export const STAGE_DEPENDENCIES: Record<string, string | null> = {
@@ -21,8 +26,7 @@ export const STAGE_DEPENDENCIES: Record<string, string | null> = {
   harvest: null,
   archive: null,
   discovery: null,
-  // Dependent chain. Drafts built on a partial harvest are worse than no
-  // drafts: they look finished and are quietly wrong.
+  // Dependent chain.
   transcription: "harvest",
   hook_tagging: "transcription",
   insights: "hook_tagging",
@@ -34,8 +38,7 @@ export const STAGE_DEPENDENCIES: Record<string, string | null> = {
  * Minimum fraction of expected rows that must actually be written.
  *
  * Read as "at least this much", not "allowed to lose this much". Each value
- * reflects how much loss is LEGITIMATE for that stage, not how much is
- * tolerable:
+ * reflects how much loss is LEGITIMATE for that stage:
  *
  *   harvest 0.9        -- one account going private or rate-limited should
  *                         not fail the night; the accounts that returned
@@ -48,9 +51,8 @@ export const STAGE_DEPENDENCIES: Record<string, string | null> = {
  *                         non-English) legitimately drop a fifth of input
  *                         before the model is ever called.
  *   drafts 0.9         -- an occasional LLM call failing or being filtered
- *                         should not kill the run; the skipped ones are
- *                         logged.
- *   archive 1.0        -- a partial copy is a broken backup. No tolerance.
+ *                         should not kill the run; skipped ones are logged.
+ *   archive 1.0        -- a partial copy is a broken backup.
  */
 export const MIN_RATIO: Record<string, number> = {
   harvest: 0.9,
@@ -108,85 +110,157 @@ export function stageFailure(r: StageResult): string | null {
   return null;
 }
 
+// --- cross-process ledger ----------------------------------------------
+//
+// Each stage runs as its own `npm run` in its own process, so an in-memory
+// ledger cannot see what the previous stage did. Run state therefore lives
+// in a file that every stage appends to and the summary step reads.
+//
+// The ledger file is gitignored and the workflow uploads logs/ on always()
+// -- so it survives a run that fails outright, which is when it matters
+// most. It is cleared at the start of every run (reset_run_state.ts);
+// without that, a run would inherit the previous run's verdicts.
+
+const LOGS_DIR = new URL("../../logs/", import.meta.url);
+const LEDGER_PATH = fileURLToPath(new URL("run-state.json", LOGS_DIR));
+
+export interface LedgerEntry {
+  stage: string;
+  outcome: "ok" | "failed" | "skipped";
+  expected: number;
+  actual: number;
+  detail?: string;
+  emptyItems?: string[];
+  blockedBy?: string;
+  at: string;
+}
+
+function readLedger(): LedgerEntry[] {
+  try {
+    if (!existsSync(LEDGER_PATH)) return [];
+    return JSON.parse(readFileSync(LEDGER_PATH, "utf-8")) as LedgerEntry[];
+  } catch {
+    // A corrupt ledger must not take the pipeline down with it.
+    return [];
+  }
+}
+
+function writeLedger(entries: LedgerEntry[]): void {
+  mkdirSync(fileURLToPath(LOGS_DIR), { recursive: true });
+  writeFileSync(LEDGER_PATH, JSON.stringify(entries, null, 2));
+}
+
+/** Clears the ledger. Called once at the start of a run. */
+export function resetLedger(): void {
+  writeLedger([]);
+}
+
 /**
- * Tracks stage outcomes across a run so dependants can be skipped and one
- * alert can summarise the night.
+ * True when this stage may run: nothing it depends on has failed or been
+ * skipped. Records a "skipped" entry when it may not, so a stage that did
+ * not run is never mistaken for one that ran fine.
  */
-export class RunLedger {
-  private outcomes = new Map<string, "ok" | "failed" | "skipped">();
-  private messages: string[] = [];
+export function canRunStage(stage: string): boolean {
+  const entries = readLedger();
+  // Deduped on write, like recordStage: generate-formats asks this twice in a
+  // content run -- once chained from the draft generator, once as the
+  // backfill step -- and "SKIPPED as a result: channel_formats,
+  // channel_formats" reads like two separate casualties.
+  const without = (s: string) => entries.filter((e) => e.stage !== s);
+  const outcomeOf = (s: string) => entries.find((e) => e.stage === s)?.outcome;
 
-  /**
-   * True when this stage may run: its dependency chain is intact. A skipped
-   * stage is recorded as skipped, NOT as success -- the whole point is that
-   * "did not run" and "ran fine" stop looking alike.
-   */
-  canRun(stage: string): boolean {
-    const blocker = this.blockedBy(stage);
-    if (!blocker) return true;
-    this.outcomes.set(stage, "skipped");
-    this.messages.push(`[${stage}] skipped due to ${blocker} failure`);
-    console.error(`\nSKIPPED [${stage}] -- skipped due to ${blocker} failure (not a success)`);
-    return false;
-  }
-
-  /** The nearest failed ancestor, walking the dependency chain. */
-  private blockedBy(stage: string): string | null {
-    let dep = STAGE_DEPENDENCIES[stage] ?? null;
-    const seen = new Set<string>();
-    while (dep && !seen.has(dep)) {
-      seen.add(dep);
-      const o = this.outcomes.get(dep);
-      if (o === "failed" || o === "skipped") {
-        // Report the stage that actually failed, not the intermediate that
-        // was merely skipped -- otherwise the alert blames the wrong thing.
-        return o === "failed" ? dep : this.blockedBy(dep) ?? dep;
-      }
-      dep = STAGE_DEPENDENCIES[dep] ?? null;
-    }
-    return null;
-  }
-
-  /** Records a stage's result. Returns true when healthy. */
-  record(r: StageResult): boolean {
-    const failure = stageFailure(r);
-    if (failure) {
-      this.outcomes.set(r.stage, "failed");
-      this.messages.push(`[${r.stage}] FAILED: ${formatStageResult(r)}`);
-      console.error(`\nFAILED ${failure}`);
+  let dep = STAGE_DEPENDENCIES[stage] ?? null;
+  const seen = new Set<string>();
+  while (dep && !seen.has(dep)) {
+    seen.add(dep);
+    const o = outcomeOf(dep);
+    if (o === "failed" || o === "skipped") {
+      // Blame the stage that actually failed, not an intermediate that was
+      // itself only skipped.
+      const root = o === "failed" ? dep : entries.find((e) => e.outcome === "failed")?.stage ?? dep;
+      writeLedger([
+        ...without(stage),
+        {
+          stage,
+          outcome: "skipped",
+          expected: 0,
+          actual: 0,
+          blockedBy: root,
+          at: new Date().toISOString(),
+        },
+      ]);
+      console.error(`\nSKIPPED [${stage}] -- skipped due to ${root} failure (this is NOT a success)`);
       return false;
     }
-    this.outcomes.set(r.stage, "ok");
-    this.messages.push(`[${r.stage}] ok: ${formatStageResult(r)}`);
-    console.log(`\nOK ${formatStageResult(r)}`);
-    return true;
+    dep = STAGE_DEPENDENCIES[dep] ?? null;
   }
+  return true;
+}
 
-  get failed(): string[] {
-    return [...this.outcomes.entries()].filter(([, o]) => o === "failed").map(([s]) => s);
+/** Records a stage result to the shared ledger. Returns true when healthy. */
+export function recordStage(r: StageResult): boolean {
+  const failure = stageFailure(r);
+  // Replace, don't append: a stage can legitimately run twice in one night.
+  // generate-formats runs once chained from the draft generator and again as
+  // the backfill step that catches drafts whose chained call failed -- the
+  // backfill is the authoritative result, and appending both would report
+  // "FAILED: channel_formats" for a gap the backfill had already filled.
+  const entries = readLedger().filter((e) => e.stage !== r.stage);
+  entries.push({
+    stage: r.stage,
+    outcome: failure ? "failed" : "ok",
+    expected: r.expected,
+    actual: r.actual,
+    detail: r.detail,
+    emptyItems: r.emptyItems,
+    at: new Date().toISOString(),
+  });
+  writeLedger(entries);
+
+  if (failure) {
+    console.error(`\nFAILED ${failure}`);
+    process.exitCode = 1;
+    return false;
   }
+  console.log(`\nOK ${formatStageResult(r)}`);
+  return true;
+}
 
-  get skipped(): string[] {
-    return [...this.outcomes.entries()].filter(([, o]) => o === "skipped").map(([s]) => s);
+/**
+ * The run's single summary, for the alert.
+ *
+ * `recorded` is the number of stages that reached their own check. Zero is
+ * NOT a pass: on a content run every step starts (if: always()) and either
+ * records a result or records its own skip, so an empty ledger means every
+ * one of them died before its check -- with continue-on-error swallowing it.
+ * That is the exact silent no-op this file exists to catch, so the caller
+ * must be able to see it rather than reading "all stages healthy".
+ */
+export function ledgerSummary(): { text: string; failed: string[]; skipped: string[]; recorded: number } {
+  const entries = readLedger();
+  const failed = entries.filter((e) => e.outcome === "failed").map((e) => e.stage);
+  const skipped = entries.filter((e) => e.outcome === "skipped").map((e) => e.stage);
+
+  const lines = ["RUN SUMMARY"];
+  if (entries.length === 0) {
+    // An empty ledger is not a healthy run -- it is a run where no stage
+    // reached its own check. Saying "all healthy" here would be the
+    // green-tick-on-a-no-op failure this whole file exists to stop.
+    lines.push("  No stages recorded anything.");
+    return { text: lines.join("\n"), failed, skipped, recorded: 0 };
   }
-
-  /** One summary for the run's single alert. */
-  summary(): string {
-    const lines = ["RUN SUMMARY", ...this.messages.map((m) => `  ${m}`)];
-    if (this.failed.length > 0) {
-      lines.push(
-        ``,
-        `FAILED: ${this.failed.join(", ")}`,
-        this.skipped.length > 0 ? `SKIPPED as a result: ${this.skipped.join(", ")}` : `Nothing was skipped.`
-      );
+  for (const e of entries) {
+    if (e.outcome === "skipped") {
+      lines.push(`  [${e.stage}] skipped due to ${e.blockedBy} failure`);
     } else {
-      lines.push(``, `All stages healthy.`);
+      const pct = e.expected > 0 ? ` (${Math.round((e.actual / e.expected) * 100)}%)` : "";
+      lines.push(`  [${e.stage}] ${e.outcome}: wrote ${e.actual} of ${e.expected}${pct}`);
+      if (e.emptyItems?.length) lines.push(`      produced nothing: ${e.emptyItems.join(", ")}`);
     }
-    return lines.join("\n");
   }
+  lines.push("");
+  lines.push(failed.length > 0 ? `FAILED: ${failed.join(", ")}` : "All stages healthy.");
+  if (skipped.length > 0) lines.push(`SKIPPED as a result: ${skipped.join(", ")}`);
 
-  /** Non-zero when anything failed or was skipped, so CI cannot read it as a pass. */
-  applyExitCode(): void {
-    if (this.failed.length > 0 || this.skipped.length > 0) process.exitCode = 1;
-  }
+  return { text: lines.join("\n"), failed, skipped, recorded: entries.length };
 }
