@@ -24,3 +24,6 @@ supabase/.temp/
 
 # Claude Code harness-internal state, not project source
 .claude/
+
+# Competitor-data backups: every post and caption we have collected, in a public repo.
+backups/

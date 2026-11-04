@@ -2,6 +2,7 @@ import Link from "next/link";
 import { getSupabaseServerClient } from "@/lib/supabase";
 import { formatScore, formatNumber } from "@/lib/format";
 import { shapeOf, cleanText } from "@/lib/shapes";
+import { benchmarkRows, rankByAverage, MIN_VIDEOS } from "@/lib/rankings";
 
 export const dynamic = "force-dynamic";
 
@@ -25,7 +26,7 @@ interface HookRow {
   opening_line: string | null;
   outlier_score: number | null;
   brand_fit: string | null;
-  competitors: { name: string; market: string; active: boolean } | null;
+  competitors: { name: string; market: string; active: boolean; category: string | null } | null;
 }
 
 function avg(ns: number[]): number {
@@ -236,7 +237,7 @@ export default async function HomePage() {
     // its own await and added a full round trip to time-to-first-byte.
     supabase
       .from("hook_library")
-      .select("hook_id, post_id, hook_pattern, narrative_structure, opening_line, outlier_score, brand_fit, competitors(name, market, active)")
+      .select("hook_id, post_id, hook_pattern, narrative_structure, opening_line, outlier_score, brand_fit, competitors(name, market, active, category)")
       .order("outlier_score", { ascending: false }),
     supabase
       .from("generated_drafts")
@@ -262,27 +263,23 @@ export default async function HomePage() {
     (h) => h.brand_fit !== "no" && h.competitors?.active !== false && h.outlier_score != null
   );
 
-  const patternScores = new Map<string, number[]>();
-  const shapeScores = new Map<string, number[]>();
-  for (const h of hooks) {
-    if (h.hook_pattern) {
-      if (!patternScores.has(h.hook_pattern)) patternScores.set(h.hook_pattern, []);
-      patternScores.get(h.hook_pattern)!.push(h.outlier_score!);
-    }
-    const shape = shapeOf(h.narrative_structure);
-    if (shape !== "Other") {
-      if (!shapeScores.has(shape)) shapeScores.set(shape, []);
-      shapeScores.get(shape)!.push(h.outlier_score!);
-    }
-  }
-  const topPatterns = Array.from(patternScores.entries())
-    .map(([k, v]) => ({ name: k.replace(/_/g, " "), n: v.length, score: avg(v) }))
-    .sort((a, b) => b.score - a.score)
-    .slice(0, 4);
-  const topShapes = Array.from(shapeScores.entries())
-    .map(([k, v]) => ({ name: k, n: v.length, score: avg(v) }))
-    .sort((a, b) => b.score - a.score)
-    .slice(0, 4);
+  // Benchmark rankings exclude viral_creator: those accounts are tracked
+  // for hook craft, not as performance peers. A lifestyle reel at 400x its
+  // own modest baseline outranks a career coach's genuinely strong 12x, and
+  // the pooled average then describes a market Ark is not in.
+  const benchmark = benchmarkRows(hooks);
+
+  // Patterns and shapes with fewer than MIN_VIDEOS behind them are dropped.
+  // One video IS its own average, so single-video patterns were reliably
+  // topping this list while saying nothing.
+  const topPatterns = rankByAverage(
+    benchmark.map((h) => ({ key: h.hook_pattern, score: h.outlier_score }))
+  );
+  const topShapes = rankByAverage(
+    benchmark
+      .map((h) => ({ key: shapeOf(h.narrative_structure), score: h.outlier_score }))
+      .filter((e) => e.key !== "Other")
+  );
 
   const topHooks = hooks.filter((h) => cleanText(h.opening_line)).slice(0, 6);
 
@@ -346,7 +343,11 @@ export default async function HomePage() {
                 </span>
               </div>
             ))}
-            {topPatterns.length === 0 && <p className="px-4 py-3 text-xs text-dim">Nothing tagged yet.</p>}
+            {topPatterns.length === 0 && (
+              <p className="px-4 py-3 text-xs text-dim">
+                No pattern has {MIN_VIDEOS}+ tagged videos behind it yet.
+              </p>
+            )}
           </div>
           <Link href="/insights" className="mt-2 inline-block text-[11px] text-dim underline decoration-border underline-offset-2 hover:text-text">
             All patterns and gaps
