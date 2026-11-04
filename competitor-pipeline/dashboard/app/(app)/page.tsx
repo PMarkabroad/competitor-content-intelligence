@@ -288,6 +288,17 @@ export default async function HomePage() {
     benchmark.map((h) => ({ key: h.hook_pattern, score: h.outlier_score }))
   );
 
+  // Shapes gets the same treatment -- it is the sibling panel and had the
+  // same empty-but-not-broken state. "Other" stays excluded from both: it is
+  // the bucket for structures the vocabulary does not recognise, so ranking
+  // it would amount to ranking "unclassified", which is currently the single
+  // largest group (8 of 19) for this roster.
+  const emergingShapes = earlySignals(
+    benchmark
+      .map((h) => ({ key: shapeOf(h.narrative_structure), score: h.outlier_score }))
+      .filter((e) => e.key !== "Other")
+  );
+
   const topHooks = hooks.filter((h) => cleanText(h.opening_line)).slice(0, 6);
 
   return (
@@ -392,8 +403,32 @@ export default async function HomePage() {
                 </span>
               </div>
             ))}
-            {topShapes.length === 0 && <p className="px-4 py-3 text-xs text-dim">Nothing tagged yet.</p>}
+            {topShapes.length === 0 && (
+              <p className="px-4 py-3 text-xs text-dim">
+                No shape has {MIN_VIDEOS}+ tagged videos behind it yet.
+              </p>
+            )}
           </div>
+
+          {emergingShapes.length > 0 && (
+            <div className="mt-3">
+              <h3 className="mb-1.5 text-[11px] font-medium text-faint">
+                Early signals &mdash; fewer than {MIN_VIDEOS} videos, not yet a finding
+              </h3>
+              <div className="panel divide-y divide-border border-dashed">
+                {emergingShapes.map((sh) => (
+                  <div key={sh.name} className="flex items-baseline justify-between gap-3 px-4 py-2">
+                    <span className="text-[13px] text-dim">{sh.name}</span>
+                    <span className="shrink-0 text-xs text-faint">
+                      <span className="num tabular-nums">{sh.score.toFixed(1)}x</span> on {sh.n}{" "}
+                      {sh.n === 1 ? "video" : "videos"}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
           <Link href="/formats" className="mt-2 inline-block text-[11px] text-dim underline decoration-border underline-offset-2 hover:text-text">
             How each shape runs
           </Link>
