@@ -14,10 +14,51 @@
  * Usage: npm run stage-summary
  */
 
+import "dotenv/config";
 import { ledgerSummary } from "./lib/stage_check.ts";
+import { getSupabaseClient } from "./lib/supabaseClient.ts";
+import { STALE_AFTER_DAYS, describeFreshness, type RosterFreshness } from "./lib/freshness.ts";
+
+/**
+ * How old the data this run worked on actually is.
+ *
+ * Read from the database, not the ledger: a content run does no harvesting,
+ * and the ledger is cleared at the start of every run, so the harvest entry
+ * from Sunday 19:00 is long gone by the time the 21:00 content run reports.
+ * `competitors.last_scraped_at` is the watermark a harvest updates, so the
+ * most recent one across the active roster IS "data as of".
+ */
+async function freshnessLine(): Promise<{ text: string; stale: boolean }> {
+  const supabase = getSupabaseClient();
+  const { data, error } = await supabase
+    .from("competitors")
+    .select("handle, last_scraped_at")
+    .eq("active", true)
+    .eq("handle_verified", true);
+
+  if (error) {
+    // Not fatal. This line is context for the verdict above it, not the
+    // verdict -- failing the run because a freshness lookup broke would be
+    // the tail wagging the dog.
+    return { text: `Data age: could not be read (${error.message})`, stale: false };
+  }
+  return describeFreshness((data ?? []) as RosterFreshness[]);
+}
 
 const { text, failed, skipped, recorded } = ledgerSummary();
 console.log(text);
+
+const freshness = await freshnessLine();
+console.log(`\n${freshness.text}`);
+if (freshness.stale) {
+  // A warning, not a failure: the user asked to be told, and stale data is a
+  // reason to look at last Sunday's run rather than to fail this one. The run
+  // that actually broke is the one that should be red, and it already is.
+  console.warn(
+    `*** STALE DATA: older than ${STALE_AFTER_DAYS} days, so at least one weekly harvest did not land. ` +
+      `Check the most recent T2/T3 harvest run before trusting anything built on this. ***`
+  );
+}
 
 // Nothing recorded is a failure, not a quiet week. Every content step starts
 // (if: always()) and either records a result or records its own skip, so an
