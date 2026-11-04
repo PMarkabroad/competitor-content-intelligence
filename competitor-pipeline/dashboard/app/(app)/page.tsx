@@ -2,7 +2,7 @@ import Link from "next/link";
 import { getSupabaseServerClient } from "@/lib/supabase";
 import { formatScore, formatNumber } from "@/lib/format";
 import { shapeOf, cleanText } from "@/lib/shapes";
-import { benchmarkRows, rankByAverage, MIN_VIDEOS } from "@/lib/rankings";
+import { benchmarkRows, rankByAverage, earlySignals, MIN_VIDEOS } from "@/lib/rankings";
 
 export const dynamic = "force-dynamic";
 
@@ -281,6 +281,13 @@ export default async function HomePage() {
       .filter((e) => e.key !== "Other")
   );
 
+  // Patterns with real data behind them but short of MIN_VIDEOS. Rendered
+  // apart from the ranking so a thin pattern is never read as a finding --
+  // hiding them entirely made an honest empty state look like a broken page.
+  const emerging = earlySignals(
+    benchmark.map((h) => ({ key: h.hook_pattern, score: h.outlier_score }))
+  );
+
   const topHooks = hooks.filter((h) => cleanText(h.opening_line)).slice(0, 6);
 
   return (
@@ -345,10 +352,29 @@ export default async function HomePage() {
             ))}
             {topPatterns.length === 0 && (
               <p className="px-4 py-3 text-xs text-dim">
-                No pattern has {MIN_VIDEOS}+ tagged videos behind it yet.
+                No pattern has {MIN_VIDEOS}+ tagged videos behind it yet — see early signals below.
               </p>
             )}
           </div>
+
+          {emerging.length > 0 && (
+            <div className="mt-3">
+              <h3 className="mb-1.5 text-[11px] font-medium text-faint">
+                Early signals &mdash; fewer than {MIN_VIDEOS} videos, not yet a finding
+              </h3>
+              <div className="panel divide-y divide-border border-dashed">
+                {emerging.map((p) => (
+                  <div key={p.name} className="flex items-baseline justify-between gap-3 px-4 py-2">
+                    <span className="text-[13px] text-dim">{p.name}</span>
+                    <span className="shrink-0 text-xs text-faint">
+                      <span className="num tabular-nums">{p.score.toFixed(1)}x</span> on {p.n}{" "}
+                      {p.n === 1 ? "video" : "videos"}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
           <Link href="/insights" className="mt-2 inline-block text-[11px] text-dim underline decoration-border underline-offset-2 hover:text-text">
             All patterns and gaps
           </Link>

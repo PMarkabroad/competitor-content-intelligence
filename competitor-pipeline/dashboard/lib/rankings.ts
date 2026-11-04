@@ -57,9 +57,37 @@ export interface Ranked {
 }
 
 /**
- * Groups scores by key and returns the strongest, dropping any group with
- * fewer than MIN_VIDEOS behind it.
+ * The groups that did NOT clear MIN_VIDEOS -- shown separately as early
+ * signals rather than hidden entirely.
+ *
+ * A thin pattern is not nothing; it is not yet a finding. Hiding it made an
+ * honest empty state look like a broken page, while mixing it into the
+ * ranking would let a single video outrank thirty. Separate block, counts
+ * visible, so the reader can see both that something is emerging and that it
+ * is not yet evidence.
  */
+export function earlySignals(
+  entries: { key: string | null | undefined; score: number | null }[],
+  limit = 6
+): Ranked[] {
+  const buckets = new Map<string, number[]>();
+  for (const e of entries) {
+    if (!e.key || e.score == null) continue;
+    if (!buckets.has(e.key)) buckets.set(e.key, []);
+    buckets.get(e.key)!.push(e.score);
+  }
+  return Array.from(buckets.entries())
+    .filter(([, scores]) => scores.length > 0 && scores.length < MIN_VIDEOS)
+    .map(([key, scores]) => ({
+      name: key.replace(/_/g, " "),
+      n: scores.length,
+      score: scores.reduce((a, b) => a + b, 0) / scores.length,
+    }))
+    // Most-evidenced first: 4 videos is closer to a finding than 1.
+    .sort((a, b) => b.n - a.n || b.score - a.score)
+    .slice(0, limit);
+}
+
 export function rankByAverage(
   entries: { key: string | null | undefined; score: number | null }[],
   limit = 4
