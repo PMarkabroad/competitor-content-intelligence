@@ -30,6 +30,7 @@ import "dotenv/config";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { getSupabaseClient } from "./lib/supabaseClient.ts";
+import { isOffBusinessSubject, subjectScope } from "./lib/subject_scope.ts";
 
 const BUSINESS_DEF_PATH = new URL("../reference/business-definition.md", import.meta.url);
 const SKILL_DIR = new URL("../reference/arkabroad-voice-skill/", import.meta.url);
@@ -142,24 +143,25 @@ async function main() {
     accounts: new Set(rs.map((r) => r.competitor_id)).size,
     score: avg(rs.map((r) => r.outlier_score!)),
   }));
-  // Visa/sponsorship subjects are stripped from the gap list before the
-  // model ever sees it. They score well and are barely covered, so they
-  // rank high as "opportunities" -- but immigration assistance is a
-  // regulated activity in Australia and Ark is not a migration agent, so
-  // they are not opportunities, they are a compliance problem. The prompt
-  // forbids them too; this stops them being offered in the first place
-  // rather than relying on the model to decline a suggestion we made.
-  const REGULATED = /\bvisa|sponsorship|sponsored|\b482\b|migration|immigration|\bPR\b|permanent residen/i;
-  const excludedGaps = subjects.filter((s) => s.accounts <= 2 && REGULATED.test(s.subject));
+  // Subject scope lives in scripts/lib/subject_scope.ts as match+exception
+  // rules, because every term here is in scope in one context and out of it
+  // in another -- a visa APPLICATION is a migration agent's business while
+  // "employers rejecting you over your 485" is Ark's core content. A flat
+  // keyword list could not express that, and removed "IMG doctor
+  // post-migration disillusionment" for containing "migration".
+  //
+  // Only SUBJECTS are gated. Hook patterns come from anywhere, including
+  // the lifestyle accounts, which is the whole point of the split.
+  const excludedGaps = subjects.filter((s) => s.accounts <= 2 && isOffBusinessSubject(s.subject));
 
   const gaps = subjects
-    .filter((s) => s.accounts <= 2 && !REGULATED.test(s.subject))
+    .filter((s) => s.accounts <= 2 && !isOffBusinessSubject(s.subject))
     .sort((a, b) => b.score / (b.accounts || 1) - a.score / (a.accounts || 1))
     .slice(0, 12);
 
   if (excludedGaps.length > 0) {
     console.log(
-      `(excluded ${excludedGaps.length} regulated-topic subject(s) from the gap list: ${excludedGaps
+      `(excluded ${excludedGaps.length} off-business subject(s) from the gap list -- their PATTERNS remain in the evidence, only their subjects are barred: ${excludedGaps
         .map((g) => g.subject)
         .join("; ")})\n`
     );
@@ -217,6 +219,8 @@ ${readFileSync(BUSINESS_DEF_PATH, "utf-8")}
 You are given AGGREGATE competitive intelligence: what is actually working across dozens of competitor videos in the Australian, US and Canadian career-content markets. You are NOT adapting any single competitor video.
 
 The US and Canadian videos are in the evidence for their HOOK PATTERNS and STRUCTURES only. Borrow the shape; never borrow the market. Every post you write is for a reader IN AUSTRALIA who already holds Australian work rights.
+
+The same split applies to SUBJECT. This evidence comes from a hook library that deliberately records patterns from lifestyle, travel and study-abroad accounts, because their structures transfer. Their subjects do not. Borrow the mechanism -- the cold open, the reversal, the numbered teardown -- and point it at a subject from the scope document above. A post about an itinerary, a scholarship, a visa or a restaurant is a failure of this instruction no matter how strong the pattern behind it was.
 
 Your job: propose original Ark Abroad posts that put a high-scoring hook pattern and structure onto a subject the data shows is proven but barely covered. The combination should be one no competitor in the data has made yet. Ground every choice in the evidence given -- say which pattern and which gap each post is built on.
 

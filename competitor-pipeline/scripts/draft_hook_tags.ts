@@ -121,11 +121,37 @@ WHO ARK IS FOR, AND WHAT IS OUT OF SCOPE:
 
 ${businessDef}
 
-A hook whose SUBJECT is out of scope still gets tagged -- the library is a
-record of what competitors do -- but it must be marked brand_fit "no" with
-the reason naming which rule it fails. Do not mark something "with_changes"
-when the subject itself is off-business; changing the words cannot make a
-visa hook relevant to a reader who already holds a visa.
+THIS LIBRARY IS A CRAFT RECORD, NOT A CONTENT PLAN. Read the scope above to
+understand Ark's reader -- then judge brand_fit on whether the hook's
+PATTERN AND STRUCTURE can carry an Ark subject, NOT on whether its own
+subject is in scope.
+
+That distinction is the whole point of the field. Judging subjects rejected
+24 of 28 hooks and every single one from the lifestyle accounts, which are
+tracked for craft and nothing else -- so the library recorded almost
+nothing and the rankings went empty. A travel creator's cold-open and a
+career coach's cold-open are the same machine pointed at different
+subjects, and the machine is what transfers.
+
+  "yes"           -- the structure is strong and lands an Ark subject with
+                     only the topic swapped.
+  "with_changes"  -- the structure works but needs rebuilding: it leans on
+                     a visual, a format Ark does not make, or a payoff that
+                     only exists for that subject.
+  "no"            -- RESERVED for two cases only. First, the structure is
+                     not reusable at all (a plain product promotion, a
+                     reaction with no shape of its own, a clip whose entire
+                     effect is one creator's face). Second, it trips a
+                     "Never ships" rule in the voice document -- advice to
+                     lie, revenge framing, ethnic generalisations, naming
+                     individuals as villains. An off-business SUBJECT is
+                     never on its own a reason for "no".
+
+Record the real subject in sub_topic exactly as it is, including when it is
+far outside Ark's scope. That field is how a reader knows what the pattern
+was carrying, and the draft generator filters on it separately -- hooks are
+a craft library, drafts are Ark's own content, and only the latter is held
+to the scope document.
 </brand_voice_document>
 
 For each video, return these fields:
@@ -153,8 +179,8 @@ opening_line -- the actual first spoken line, verbatim from the transcript, trim
 au_transplant -- one of: ${TRI_STATE.join(", ")} -- could this video's STRUCTURE be rebuilt for an Australian internationally-trained-professional audience?
 transplant_note -- free text: what specifically would carry over and what would need changing. Be concrete, cite details from the transcript. Flag any country-specific claims (US visa law, US salary bands) that would not survive the move.
 
-brand_fit -- one of: ${TRI_STATE.join(", ")} -- would Ark Abroad actually publish something built on this?
-brand_fit_note -- free text, and this is the most important field you write. Judge against the voice document above. Cite the specific rule or check you are applying. Say "no" whenever the content trips a "Never ships" item (advice to lie or misrepresent, revenge framing, ethnic generalisations, claims racism doesn't exist, naming individuals/employers as villains, unverified outcome numbers). Say "with_changes" when the structure is usable but the substance is generic-career-coach filler, has no real mechanism, has no numbers, or promotes a third-party paid program. Be specific and evidence-based, not vague.
+brand_fit -- one of: ${TRI_STATE.join(", ")} -- could Ark REBUILD this hook's structure around one of its own subjects? Judge the mechanism, not the topic.
+brand_fit_note -- free text, and the most important field you write. Say what the STRUCTURE is and what Ark subject it could carry -- e.g. "cold-open on a number, then the reversal; would carry 'what your overseas degree is actually worth here'". Where you say "with_changes", name what has to be rebuilt. Where you say "no", name which of the two permitted reasons applies (structure not reusable, or a specific Never-ships rule). Never cite the subject being off-business as the reason -- that is what sub_topic is for.
 
 Return ONLY a JSON array, no markdown fences, no preamble:
 [{"post_id": "...", "hook_pattern": "...", "format": null, "topic_slug": null, "sub_topic": "...", "content_angle": "...", "cta": null, "narrative_structure": "...", "opening_line": "...", "au_transplant": "...", "transplant_note": "...", "brand_fit": "...", "brand_fit_note": "..."}]

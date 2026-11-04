@@ -192,7 +192,14 @@ export async function ingestPost(
       post_type: item.type ?? item.postType ?? null,
       caption: item.caption ?? item.text ?? null,
       posted_at: item.timestamp ?? item.postedAt ?? null,
-      views: item.videoViewCount ?? item.viewCount ?? item.views ?? null,
+      // videoPlayCount FIRST. On apify/instagram-post-scraper build 0.0.655
+      // (2026-11-04) videoViewCount is present but NULL on every video while
+      // videoPlayCount carries the real figure -- 460 posts ingested with
+      // views=null, every vpf null, every baseline absent and zero outliers,
+      // so the whole chain stalled silently at the scoring step.
+      // ?? skips null, so listing the populated field first is the fix and
+      // the older names stay as fallbacks for rows from earlier builds.
+      views: item.videoPlayCount ?? item.videoViewCount ?? item.viewCount ?? item.views ?? null,
       likes: item.likesCount ?? item.likeCount ?? item.likes ?? null,
       comments: item.commentsCount ?? item.commentCount ?? item.comments ?? null,
       shares: item.sharesCount ?? item.shareCount ?? item.shares ?? null,
