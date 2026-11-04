@@ -31,7 +31,7 @@ import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { getSupabaseClient } from "./lib/supabaseClient.ts";
 import { isOffBusinessSubject, subjectScope } from "./lib/subject_scope.ts";
-import { recordStage, canRunStage } from "./lib/stage_check.ts";
+import { recordStage, canRunStage, stageWrote } from "./lib/stage_check.ts";
 
 const BUSINESS_DEF_PATH = new URL("../reference/business-definition.md", import.meta.url);
 const SKILL_DIR = new URL("../reference/arkabroad-voice-skill/", import.meta.url);
@@ -76,6 +76,25 @@ async function main() {
   // Drafts are built from the hook library, so tagging having failed means
   // writing this week's posts from last week's hooks while looking current.
   if (!canRunStage("drafts")) return;
+
+  // Nothing new tagged means nothing new to write from. The draft generator
+  // reads the hook library and is explicitly told which angles have already
+  // been used, but an unchanged library yields near-duplicates of last
+  // week's batch -- eight more posts that look like output and are really
+  // the same eight ideas rephrased. A quiet week should produce a quiet
+  // /drafts page, not filler.
+  //
+  // --force overrides, for the case where someone has re-tagged or edited
+  // the library by hand and genuinely wants a fresh batch off it.
+  const tagged = stageWrote("hook_tagging");
+  if (tagged === 0 && !process.argv.includes("--force")) {
+    console.log(
+      "hook_tagging wrote no new rows this run, so there are no new hooks to build on. " +
+        "Skipping draft generation -- pass --force to generate from the existing library anyway."
+    );
+    recordStage({ stage: "drafts", expected: 0, actual: 0, detail: "no new hooks this run" });
+    return;
+  }
 
   const count = Number(arg("count") ?? 5);
   // Posts per API call. Five fits comfortably inside max_tokens alongside

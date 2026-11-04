@@ -96,22 +96,25 @@ async function main() {
     return; // skip, not fail -- exit 0
   }
 
-  const { totalPosts, accountsWithPosts, emptyHandles } = await harvestCompetitors(supabase, actors, apifyToken, competitors, `Scheduled ${label}`, "scheduled-harvest");
+  const { totalPosts, accountsWithPosts, accountsExpected, emptyHandles, quietHandles } = await harvestCompetitors(supabase, actors, apifyToken, competitors, `Scheduled ${label}`, "scheduled-harvest");
 
   const spentAfter = await getRealMonthToDateSpendUsd(apifyToken);
   console.log(`\n[${tier}] Harvest complete. ${totalPosts} total post row(s) across ${competitors.length} competitor(s). Real spend now: $${spentAfter.toFixed(4)} / $${cap}.`);
 
-  // Measured by ACCOUNT, not by post. Post counts vary hugely per account,
-  // so a ratio over posts would say nothing, while "20 of 23 accounts
-  // returned something" is exactly the health question. min_ratio 0.9 lets
-  // one or two go private or get rate-limited without failing the night; the
-  // ones that produced nothing are named in the log.
+  // Measured by ACCOUNT, not by post, and only over accounts that were
+  // expected to produce -- a full pull that returned nothing, or an account
+  // that did return something. An account with nothing new since its
+  // watermark is routine and is reported separately rather than counted as a
+  // shortfall; see harvestCompetitors for why that distinction is the whole
+  // ballgame on a weekly cadence.
   recordStage({
     stage: "harvest",
-    expected: competitors.length,
+    expected: accountsExpected,
     actual: accountsWithPosts,
     emptyItems: emptyHandles,
-    detail: `${totalPosts} post row(s)`,
+    detail:
+      `${totalPosts} post row(s)` +
+      (quietHandles.length > 0 ? `, ${quietHandles.length} account(s) quiet since last run` : ""),
   });
 }
 

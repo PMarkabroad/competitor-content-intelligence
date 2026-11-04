@@ -299,7 +299,16 @@ export async function harvestCompetitors(
   competitors: Competitor[],
   logLabel: string,
   logFilePrefix: string
-): Promise<{ totalPosts: number; accountsWithPosts: number; emptyHandles: string[] }> {
+): Promise<{
+  totalPosts: number;
+  accountsWithPosts: number;
+  /** Accounts that either had to produce (a full pull) or did. The stage ratio's denominator. */
+  accountsExpected: number;
+  /** Full pulls that produced nothing -- the suspect kind. */
+  emptyHandles: string[];
+  /** Incremental pulls with nothing new -- the routine kind. */
+  quietHandles: string[];
+}> {
   const instagramCompetitors = competitors.filter((c) => c.platform === "instagram");
   const tiktokCompetitors = competitors.filter((c) => c.platform === "tiktok");
   const unknownPlatform = competitors.filter((c) => c.platform !== "instagram" && c.platform !== "tiktok");
@@ -321,28 +330,68 @@ export async function harvestCompetitors(
   // stage log without digging through the run. Counted by ACCOUNT rather
   // than by post: post counts vary hugely per account, so a ratio over posts
   // would say nothing, while "20 of 23 accounts returned something" does.
+  //
+  // The two kinds of nothing are NOT the same, and the stage ratio must only
+  // count one of them:
+  //
+  //   full pull (last_scraped_at === null) returning nothing -- suspect. The
+  //     account has never been harvested, so it should have a back catalogue.
+  //     Nothing almost always means a broken handle or a dead actor.
+  //   incremental pull returning nothing -- routine. It means the account has
+  //     posted nothing since the watermark, which happens constantly: on this
+  //     roster the median account posts a handful of times a month, so most
+  //     accounts return zero on most runs.
+  //
+  // Counting the routine kind as a shortfall was a real bug in the first cut
+  // of this: an ordinary quiet week would have come back at well under the
+  // harvest stage's 90% minimum, failed the run and skipped transcription,
+  // hook tagging, drafts and channel formats for no reason -- worse than the
+  // silent no-op the guard exists to catch, because it would have trained
+  // everyone to ignore a red Sunday.
+  //
+  // So `expected` is every account that EITHER was a full pull (must produce)
+  // OR did produce. An all-incremental run where nothing new was posted gives
+  // expected = 0, and stageFailure() treats nothing expected as nothing
+  // missing. The mechanism-level failures that used to hide behind that --
+  // a deleted build, a renamed field -- are now caught before and during
+  // every call by check_actor_builds.ts and lib/response_shape.ts, which is
+  // what lets this check be about data volume alone.
   const emptyHandles: string[] = [];
+  const quietHandles: string[] = [];
   let accountsWithPosts = 0;
+  let accountsExpected = 0;
   for (const c of competitors) {
     const postCount = postCounts.get(c.competitor_id) ?? 0;
+    const isFullPull = c.last_scraped_at === null;
     totalPosts += postCount;
+
     if (postCount > 0) accountsWithPosts += 1;
-    else emptyHandles.push(`@${c.handle}`);
-    // A zero-row FULL pull (no prior last_scraped_at) almost always means
-    // a broken handle or a dead actor -- flagged. A zero-row INCREMENTAL
-    // pull just means nothing new posted since the watermark, which is
-    // routine on any cadence -- c.last_scraped_at reflects state BEFORE
-    // this run, so it still distinguishes the two cases correctly here.
-    if (postCount === 0 && c.last_scraped_at === null) {
-      logFlag(logFilePrefix, `${logLabel} harvest returned zero rows on a FULL PULL for an active competitor`, {
-        competitorId: c.competitor_id,
-        name: c.name,
-        handle: c.handle,
-        platform: c.platform,
-        market: c.market,
-      });
+    if (postCount > 0 || isFullPull) accountsExpected += 1;
+
+    if (postCount === 0) {
+      if (isFullPull) {
+        // c.last_scraped_at reflects state BEFORE this run, so it still
+        // distinguishes the two cases correctly here.
+        emptyHandles.push(`@${c.handle}`);
+        logFlag(logFilePrefix, `${logLabel} harvest returned zero rows on a FULL PULL for an active competitor`, {
+          competitorId: c.competitor_id,
+          name: c.name,
+          handle: c.handle,
+          platform: c.platform,
+          market: c.market,
+        });
+      } else {
+        quietHandles.push(`@${c.handle}`);
+      }
     }
   }
 
-  return { totalPosts, accountsWithPosts, emptyHandles };
+  if (quietHandles.length > 0) {
+    console.log(
+      `  ${quietHandles.length} account(s) had nothing new since their watermark (routine, not counted ` +
+        `against the stage check): ${quietHandles.join(", ")}`
+    );
+  }
+
+  return { totalPosts, accountsWithPosts, accountsExpected, emptyHandles, quietHandles };
 }

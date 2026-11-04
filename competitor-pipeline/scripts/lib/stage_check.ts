@@ -197,6 +197,21 @@ export function canRunStage(stage: string): boolean {
   return true;
 }
 
+/**
+ * How many rows a stage actually wrote this run, or null if it never ran.
+ *
+ * Lets a stage ask not just "did my dependency succeed?" (canRunStage) but
+ * "did it produce anything NEW?". Those are different questions: a tagging
+ * stage with nothing to tag succeeds honestly, writing zero rows, and a
+ * generator downstream of it would then build this week's output from last
+ * week's input and present it as current.
+ */
+export function stageWrote(stage: string): number | null {
+  const entry = readLedger().find((e) => e.stage === stage);
+  if (!entry || entry.outcome === "skipped") return null;
+  return entry.actual;
+}
+
 /** Records a stage result to the shared ledger. Returns true when healthy. */
 export function recordStage(r: StageResult): boolean {
   const failure = stageFailure(r);

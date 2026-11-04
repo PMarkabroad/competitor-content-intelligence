@@ -61,10 +61,27 @@ async function main() {
     return; // skip, not fail -- exit 0
   }
 
-  const totalPosts = await harvestCompetitors(supabase, actors, apifyToken, competitors, "T1", "harvest-t1");
+  // Destructured, not assigned whole: harvestCompetitors returned a bare
+  // number until the stage guards went in, and `${totalPosts}` below was
+  // quietly printing [object Object] from then on. T1 is exempt from scoring
+  // and is not scheduled, so no stage is recorded here -- but the quiet-
+  // account count is still worth printing.
+  const { totalPosts, accountsWithPosts, quietHandles } = await harvestCompetitors(
+    supabase,
+    actors,
+    apifyToken,
+    competitors,
+    "T1",
+    "harvest-t1"
+  );
 
   const spentAfter = await getRealMonthToDateSpendUsd(apifyToken);
-  console.log(`\n[T1] Harvest complete. ${totalPosts} total post row(s) across ${competitors.length} competitor(s). Real spend now: $${spentAfter.toFixed(4)} / $${cap}.`);
+  console.log(
+    `\n[T1] Harvest complete. ${totalPosts} total post row(s) from ${accountsWithPosts} of ` +
+      `${competitors.length} competitor(s)` +
+      (quietHandles.length > 0 ? `, ${quietHandles.length} quiet since last run` : "") +
+      `. Real spend now: $${spentAfter.toFixed(4)} / $${cap}.`
+  );
 }
 
 main().catch((err) => {
