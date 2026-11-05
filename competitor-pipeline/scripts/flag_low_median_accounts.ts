@@ -40,8 +40,7 @@ async function main() {
 
   const { data: competitors, error: competitorsError } = await supabase
     .from("competitors")
-    .select("competitor_id, name, tier, low_median_flag, notes")
-    .in("tier", ["T2", "T3"])
+    .select("competitor_id, name, category, low_median_flag, notes")
     .eq("active", true);
   if (competitorsError) throw new Error(`Failed to read competitors: ${competitorsError.message}`);
 
@@ -99,10 +98,10 @@ async function main() {
 
     if (shouldFlag) {
       flagged += 1;
-      console.log(`FLAGGED: ${c.name} (${c.tier}, ${band.name} band, followers=${followers}) -- median_vpf=${median.toFixed(5)} < ${band.minMedianVpf}`);
+      console.log(`FLAGGED: ${c.name} (${c.category}, ${band.name} band, followers=${followers}) -- median_vpf=${median.toFixed(5)} < ${band.minMedianVpf}`);
     } else {
       cleared += 1;
-      console.log(`CLEARED: ${c.name} (${c.tier}, ${band.name} band, followers=${followers}) -- median_vpf=${median.toFixed(5)} >= ${band.minMedianVpf}`);
+      console.log(`CLEARED: ${c.name} (${c.category}, ${band.name} band, followers=${followers}) -- median_vpf=${median.toFixed(5)} >= ${band.minMedianVpf}`);
     }
   }
 

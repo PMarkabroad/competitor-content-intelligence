@@ -14,8 +14,6 @@ import { assertResponseShape } from "./response_shape.ts";
 
 const LOG_DIR = new URL("../../logs/", import.meta.url);
 
-export type Tier = "T1" | "T2" | "T3";
-
 export interface ActorPin {
   actorId: string;
   build: string;
@@ -66,7 +64,6 @@ export interface Competitor {
   handle: string;
   posts_per_run: number | null;
   last_scraped_at: string | null;
-  tier: Tier;
 }
 
 export function logFlag(logFilePrefix: string, message: string, context: Record<string, unknown>) {
@@ -131,7 +128,7 @@ export async function getRealMonthToDateSpendUsd(apifyToken: string): Promise<nu
 
 export function estimateRunCostUsd(competitors: Competitor[]): number {
   return competitors.reduce((sum, c) => {
-    const maxResults = c.posts_per_run ?? config.POSTS_PER_RUN[c.tier];
+    const maxResults = c.posts_per_run ?? config.DEFAULT_POSTS_PER_RUN;
     return sum + config.ESTIMATED_COST_PER_PROFILE_USD + maxResults * config.ESTIMATED_COST_PER_POST_USD;
   }, 0);
 }
@@ -182,7 +179,7 @@ export async function harvestInstagram(
     (profileItems[0]?.followers as number | undefined) ??
     null;
 
-  const postsPerRun = c.posts_per_run ?? config.POSTS_PER_RUN[c.tier];
+  const postsPerRun = c.posts_per_run ?? config.DEFAULT_POSTS_PER_RUN;
   const input: Record<string, unknown> = {
     username: [c.handle],
     resultsLimit: postsPerRun,
@@ -237,7 +234,7 @@ export async function harvestTikTokBatch(
 
   for (const [sinceDate, group] of groups.entries()) {
     const runId = crypto.randomUUID();
-    const maxPostsPerRun = Math.max(...group.map((c) => c.posts_per_run ?? config.POSTS_PER_RUN[c.tier]));
+    const maxPostsPerRun = Math.max(...group.map((c) => c.posts_per_run ?? config.DEFAULT_POSTS_PER_RUN));
     const input: Record<string, unknown> = {
       profiles: group.map((c) => c.handle),
       resultsPerPage: maxPostsPerRun,

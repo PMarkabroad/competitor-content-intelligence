@@ -799,7 +799,7 @@ async function stageShortlist() {
   const columns = [
     "candidate_id", "platform", "handle", "display_name", "followers", "market_guess",
     "video_posts_90d", "median_vpf_90d", "band", "found_via", "classification", "classification_reason",
-    "relevance_score", "topic_slugs", "proposed_tier", "reviewed_by",
+    "relevance_score", "topic_slugs", "proposed_category", "reviewed_by",
   ];
 
   const byMarket = new Map<string, typeof rows>();
@@ -828,7 +828,7 @@ async function stageShortlist() {
         classification_reason: row.classification_reason ?? "",
         relevance_score: "",
         topic_slugs: "",
-        proposed_tier: "",
+        proposed_category: "",
         reviewed_by: "",
       };
       lines.push(columns.map((c) => csvEscape(record[c])).join(","));
@@ -850,9 +850,9 @@ async function stagePromote(filePath: string) {
   let refused = 0;
 
   for (const row of rows) {
-    if (!row.reviewed_by?.trim() || !row.proposed_tier?.trim()) {
+    if (!row.reviewed_by?.trim() || !row.proposed_category?.trim()) {
       refused += 1;
-      console.log(`REFUSED (missing reviewed_by or proposed_tier): ${row.handle}`);
+      console.log(`REFUSED (missing reviewed_by or proposed_category): ${row.handle}`);
       continue;
     }
 
@@ -873,7 +873,7 @@ async function stagePromote(filePath: string) {
 
     const { error: insertError } = await supabase.from("competitors").insert({
       name: row.display_name?.trim() || row.handle,
-      tier: row.proposed_tier.trim(),
+      category: row.proposed_category.trim(),
       market: row.market_guess?.trim() || "unknown",
       platform: row.platform || "tiktok",
       handle: row.handle,
@@ -891,7 +891,7 @@ async function stagePromote(filePath: string) {
       .update({
         reviewed_by: row.reviewed_by.trim(),
         reviewed_at: new Date().toISOString(),
-        proposed_tier: row.proposed_tier.trim(),
+        proposed_category: row.proposed_category.trim(),
         relevance_score: row.relevance_score ? Number(row.relevance_score) : null,
         topic_slugs: row.topic_slugs ? row.topic_slugs.split(";").map((s) => s.trim()) : null,
         promoted: true,
@@ -899,10 +899,10 @@ async function stagePromote(filePath: string) {
       .eq("candidate_id", row.candidate_id);
 
     promoted += 1;
-    console.log(`PROMOTED: ${row.handle} -> competitors (${row.proposed_tier}, ${row.market_guess})`);
+    console.log(`PROMOTED: ${row.handle} -> competitors (${row.proposed_category}, ${row.market_guess})`);
   }
 
-  console.log(`\n${promoted} promoted, ${refused} refused (blank reviewed_by or proposed_tier).`);
+  console.log(`\n${promoted} promoted, ${refused} refused (blank reviewed_by or proposed_category).`);
 }
 
 async function main() {

@@ -34,7 +34,7 @@ export function daysSince(value: string | null | undefined): number | null {
   return Math.floor((Date.now() - d.getTime()) / (1000 * 60 * 60 * 24));
 }
 
-// Overdue logic lives in lib/cadence.ts -- it needs tier as a fallback
+// Overdue logic lives in lib/cadence.ts -- it needs the row's scrape_cadence
 // since competitors.scrape_cadence isn't populated on every row.
 
 export function formatChange(value: number | null | undefined): string {

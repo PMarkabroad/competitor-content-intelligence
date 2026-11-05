@@ -31,7 +31,7 @@ async function main() {
 
   const { data: competitors, error } = await supabase
     .from("competitors")
-    .select("competitor_id, name, handle, market, tier, posts_per_run")
+    .select("competitor_id, name, handle, market, category, posts_per_run")
     .eq("active", true)
     .eq("handle_verified", true)
     .in("market", ["AU", "US"]);
@@ -46,7 +46,7 @@ async function main() {
 
   for (const c of competitors) {
     const runId = crypto.randomUUID();
-    console.log(`--- ${c.name} (${c.handle}, ${c.market}/${c.tier}) run_id=${runId} ---`);
+    console.log(`--- ${c.name} (${c.handle}, ${c.market}/${c.category}) run_id=${runId} ---`);
 
     const profileItems = await runApifyActor(actors.profile, { usernames: [c.handle] }, apifyToken);
     for (const item of profileItems) {

@@ -16,7 +16,7 @@ import { getSupabaseClient } from "./lib/supabaseClient.ts";
 
 interface WorksheetRow {
   name: string;
-  tier: string;
+  category: string;
   market: string;
   source_url: string;
   platform: string;
@@ -60,7 +60,7 @@ async function main() {
 
     if (wantsVerifiedTrue && !checkedBy) {
       refused += 1;
-      refusedRows.push(`${r.name} (${r.tier}, ${r.market}, ${r.platform})`);
+      refusedRows.push(`${r.name} (${r.category}, ${r.market}, ${r.platform})`);
       continue;
     }
 
@@ -80,7 +80,6 @@ async function main() {
         active: toBool(r.active),
       })
       .eq("name", r.name)
-      .eq("tier", r.tier)
       .eq("market", r.market);
 
     if (error) {

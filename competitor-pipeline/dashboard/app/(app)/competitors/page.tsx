@@ -3,6 +3,7 @@ import { getSupabaseServerClient } from "@/lib/supabase";
 import { Badge } from "@/components/Badge";
 import { formatNumber, formatVpf, formatChange, formatDate } from "@/lib/format";
 import { isOverdue } from "@/lib/cadence";
+import { CATEGORIES, categoryLabel } from "@/lib/categories";
 
 export const dynamic = "force-dynamic";
 
@@ -11,7 +12,7 @@ interface CompetitorSummary {
   name: string;
   handle: string;
   platform: string;
-  tier: string;
+  category: string | null;
   market: string;
   active: boolean;
   handle_verified: boolean;
@@ -30,12 +31,11 @@ interface CompetitorSummary {
 
 const MARKETS = ["AU", "US", "CA"];
 const PLATFORMS = ["tiktok", "instagram"];
-const TIERS = ["T1", "T2", "T3"];
 
 export default async function CompetitorsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ market?: string; platform?: string; tier?: string; sort?: string; dir?: string }>;
+  searchParams: Promise<{ market?: string; platform?: string; category?: string; sort?: string; dir?: string }>;
 }) {
   const params = await searchParams;
   const supabase = getSupabaseServerClient();
@@ -69,7 +69,7 @@ export default async function CompetitorsPage({
   }));
   if (params.market) rows = rows.filter((r) => r.market === params.market);
   if (params.platform) rows = rows.filter((r) => r.platform === params.platform);
-  if (params.tier) rows = rows.filter((r) => r.tier === params.tier);
+  if (params.category) rows = rows.filter((r) => r.category === params.category);
 
   type Row = (typeof rows)[number];
   const sortKey = (params.sort ?? "usable_hooks") as keyof Row;
@@ -86,7 +86,7 @@ export default async function CompetitorsPage({
 
   function sortLink(key: string, label: string) {
     const nextDir = sortKey === key && dir === -1 ? "asc" : "desc";
-    const qs = new URLSearchParams({ ...(params.market ? { market: params.market } : {}), ...(params.platform ? { platform: params.platform } : {}), ...(params.tier ? { tier: params.tier } : {}), sort: key, dir: nextDir });
+    const qs = new URLSearchParams({ ...(params.market ? { market: params.market } : {}), ...(params.platform ? { platform: params.platform } : {}), ...(params.category ? { category: params.category } : {}), sort: key, dir: nextDir });
     return (
       <a href={`/competitors?${qs.toString()}`} className="hover:text-text">
         {label}
@@ -115,9 +115,9 @@ export default async function CompetitorsPage({
             <option value="">All platforms</option>
             {PLATFORMS.map((p) => <option key={p} value={p}>{p}</option>)}
           </select>
-          <select name="tier" defaultValue={params.tier ?? ""} className="rounded-md border border-border bg-surface px-2 py-1.5 text-xs text-text">
-            <option value="">All tiers</option>
-            {TIERS.map((t) => <option key={t} value={t}>{t}</option>)}
+          <select name="category" defaultValue={params.category ?? ""} className="rounded-md border border-border bg-surface px-2 py-1.5 text-xs text-text">
+            <option value="">All kinds</option>
+            {CATEGORIES.map((c) => <option key={c} value={c}>{categoryLabel(c)}</option>)}
           </select>
           <button type="submit" className="rounded-md bg-text px-3 py-1.5 text-xs font-medium text-bg transition-opacity hover:opacity-85">Apply</button>
         </form>
@@ -140,12 +140,12 @@ export default async function CompetitorsPage({
           </thead>
           <tbody>
             {rows.map((r) => {
-              const overdue = r.active && isOverdue(r.last_scraped_at, r.tier, null);
+              const overdue = r.active && isOverdue(r.last_scraped_at, null);
               return (
                 <tr key={r.competitor_id} className="border-b border-border last:border-b-0 hover:bg-surface-hover">
                   <td className="px-2 py-2">
                     <Link href={`/competitors/${r.handle}`} className="font-medium text-text underline decoration-border underline-offset-2 hover:decoration-text">{r.handle}</Link>
-                    <div className="text-faint">{r.name} · {r.platform} · {r.tier}</div>
+                    <div className="text-faint">{r.name} · {r.platform} · {categoryLabel(r.category)}</div>
                   </td>
                   <td className="px-2 py-2 text-dim">{r.market}</td>
                   <td className="px-2 py-2 text-right">

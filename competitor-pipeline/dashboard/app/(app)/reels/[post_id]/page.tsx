@@ -4,6 +4,7 @@ import { getSupabaseServerClient } from "@/lib/supabase";
 import { Badge } from "@/components/Badge";
 import { formatNumber, formatVpf, formatScore, formatDate, deriveThumbnailUrl } from "@/lib/format";
 import { tagHook } from "./actions";
+import { categoryLabel } from "@/lib/categories";
 
 export const dynamic = "force-dynamic";
 
@@ -32,7 +33,7 @@ export default async function ReelDetailPage({ params }: { params: Promise<{ pos
   if (!post) notFound();
 
   const [{ data: competitor }, { data: transcript }, { data: hook }, { data: outlierRow }] = await Promise.all([
-    supabase.from("competitors").select("competitor_id, name, handle, market, tier, platform").eq("competitor_id", post.competitor_id).maybeSingle(),
+    supabase.from("competitors").select("competitor_id, name, handle, market, category, platform").eq("competitor_id", post.competitor_id).maybeSingle(),
     supabase.from("competitor_transcripts").select("*").eq("post_id", post_id).maybeSingle(),
     supabase.from("hook_library").select("*").eq("post_id", post_id).maybeSingle(),
     supabase.from("v_outliers").select("outlier_score, vpf").eq("post_id", post_id).maybeSingle(),
@@ -61,7 +62,7 @@ export default async function ReelDetailPage({ params }: { params: Promise<{ pos
               </Link>
             )}
             {competitor && <Badge tone="neutral">{competitor.market}</Badge>}
-            {competitor && <Badge tone="brand">{competitor.tier}</Badge>}
+            {competitor && <Badge tone="brand">{categoryLabel(competitor.category)}</Badge>}
             <span className="text-xs text-faint">{formatDate(post.posted_at)}</span>
             {post.post_url && (
               <a href={post.post_url} target="_blank" rel="noreferrer" className="text-xs text-text underline decoration-border underline-offset-2 hover:decoration-text">

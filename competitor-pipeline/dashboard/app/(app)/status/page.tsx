@@ -4,6 +4,7 @@ import { Badge } from "@/components/Badge";
 import { formatDate, daysSince } from "@/lib/format";
 import { isOverdue, expectedCadenceDays } from "@/lib/cadence";
 import { getMonthToDateApifySpend, MONTHLY_APIFY_SPEND_CAP_USD } from "@/lib/apifyUsage";
+import { categoryLabel } from "@/lib/categories";
 
 export const dynamic = "force-dynamic";
 
@@ -13,7 +14,7 @@ export default async function StatusPage() {
   const [{ data: competitors, error }, spend, { data: pendingRows, error: pendingError }] = await Promise.all([
     supabase
       .from("competitors")
-      .select("competitor_id, name, handle, tier, market, active, last_scraped_at, scrape_cadence, low_median_flag"),
+      .select("competitor_id, name, handle, category, market, active, last_scraped_at, scrape_cadence, low_median_flag"),
     getMonthToDateApifySpend(),
     // Filtered in JS, not a Postgrest .not(...,"in",...) -- SQL's NOT IN
     // treats a null classification as unknown and silently excludes it
@@ -29,14 +30,14 @@ export default async function StatusPage() {
   const rows = competitors ?? [];
   const active = rows.filter((r) => r.active);
 
-  const byTierMarket = new Map<string, number>();
+  const byKindMarket = new Map<string, number>();
   for (const r of rows) {
-    const key = `${r.tier}/${r.market}`;
-    byTierMarket.set(key, (byTierMarket.get(key) ?? 0) + 1);
+    const key = `${categoryLabel(r.category)} / ${r.market}`;
+    byKindMarket.set(key, (byKindMarket.get(key) ?? 0) + 1);
   }
-  const tierMarketKeys = Array.from(byTierMarket.keys()).sort();
+  const kindMarketKeys = Array.from(byKindMarket.keys()).sort();
 
-  const overdueRows = active.filter((r) => isOverdue(r.last_scraped_at, r.tier, r.scrape_cadence));
+  const overdueRows = active.filter((r) => isOverdue(r.last_scraped_at, r.scrape_cadence));
   const lowMedianRows = rows.filter((r) => r.low_median_flag);
 
   const spendPct =
@@ -48,12 +49,12 @@ export default async function StatusPage() {
 
       <div className="mb-4 grid grid-cols-3 gap-4">
         <div className="panel p-4">
-          <h2 className="mb-2 text-xs font-semibold text-faint">Roster by tier / market</h2>
+          <h2 className="mb-2 text-xs font-semibold text-faint">Roster by kind / market</h2>
           <ul className="space-y-0.5 text-xs text-dim">
-            {tierMarketKeys.map((k) => (
+            {kindMarketKeys.map((k) => (
               <li key={k} className="flex justify-between">
                 <span>{k}</span>
-                <span className="font-medium text-text">{byTierMarket.get(k)}</span>
+                <span className="font-medium text-text">{byKindMarket.get(k)}</span>
               </li>
             ))}
           </ul>
@@ -106,7 +107,7 @@ export default async function StatusPage() {
           </thead>
           <tbody>
             {active.map((r) => {
-              const overdue = isOverdue(r.last_scraped_at, r.tier, r.scrape_cadence);
+              const overdue = isOverdue(r.last_scraped_at, r.scrape_cadence);
               const since = daysSince(r.last_scraped_at);
               return (
                 <tr key={r.competitor_id} className="border-b border-border last:border-b-0">
@@ -115,9 +116,9 @@ export default async function StatusPage() {
                       {r.handle}
                     </Link>
                   </td>
-                  <td className="px-2 py-1 text-dim">{r.tier} / {r.market}</td>
+                  <td className="px-2 py-1 text-dim">{categoryLabel(r.category)} / {r.market}</td>
                   <td className="px-2 py-1 text-dim">
-                    {formatDate(r.last_scraped_at)} {since !== null && `(${since}d ago, expects every ${expectedCadenceDays(r.tier, r.scrape_cadence)}d)`}
+                    {formatDate(r.last_scraped_at)} {since !== null && `(${since}d ago, expects every ${expectedCadenceDays(r.scrape_cadence)}d)`}
                   </td>
                   <td className="px-2 py-1">{overdue ? <Badge tone="bad">overdue</Badge> : <Badge tone="good">on track</Badge>}</td>
                 </tr>

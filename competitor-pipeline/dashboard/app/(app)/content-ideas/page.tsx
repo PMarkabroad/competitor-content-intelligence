@@ -3,6 +3,7 @@ import { CopyDumpButton } from "@/components/CopyDumpButton";
 import { GenerateDraftButton, type DraftPayload } from "@/components/GenerateDraftButton";
 import { formatScore, formatNumber, formatVpf } from "@/lib/format";
 import { shapeOf, cleanText } from "@/lib/shapes";
+import { categoryLabel } from "@/lib/categories";
 
 export const dynamic = "force-dynamic";
 
@@ -32,7 +33,7 @@ interface TaggedRow {
   brand_fit: string | null;
   brand_fit_note: string | null;
   competitor_posts: { post_url: string | null; caption: string | null } | null;
-  competitors: { name: string; market: string; tier: string; active: boolean } | null;
+  competitors: { name: string; market: string; category: string | null; active: boolean } | null;
 }
 
 interface OutlierRow {
@@ -71,7 +72,7 @@ export default async function ContentIdeasPage() {
   const { data: taggedData, error: taggedError } = await supabase
     .from("hook_library")
     .select(
-      "hook_id, post_id, hook_pattern, format, topic_slug, content_angle, narrative_structure, cta, why_it_performed, opening_line, outlier_score, vpf, au_transplant, transplant_note, brand_fit, brand_fit_note, competitor_posts(post_url, caption), competitors(name, market, tier, active)"
+      "hook_id, post_id, hook_pattern, format, topic_slug, content_angle, narrative_structure, cta, why_it_performed, opening_line, outlier_score, vpf, au_transplant, transplant_note, brand_fit, brand_fit_note, competitor_posts(post_url, caption), competitors(name, market, category, active)"
     )
     .order("outlier_score", { ascending: false });
   if (taggedError) throw new Error(`Failed to load hook_library: ${taggedError.message}`);
@@ -138,7 +139,7 @@ export default async function ContentIdeasPage() {
     const transcript = transcriptByPost.get(row.post_id) ?? null;
     const competitorName = row.competitors?.name ?? "Unknown";
     const dumpLines: string[] = [
-      `${competitorName} (${market}, ${row.competitors?.tier ?? "—"}) — ${row.hook_pattern ?? "—"} / ${row.format ?? "—"}`,
+      `${competitorName} (${market}, ${categoryLabel(row.competitors?.category)}) — ${row.hook_pattern ?? "—"} / ${row.format ?? "—"}`,
     ];
     if (row.opening_line) dumpLines.push(`"${row.opening_line}"`);
     dumpLines.push("");

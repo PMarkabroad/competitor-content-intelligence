@@ -248,7 +248,7 @@ export async function ingestTranscript(
  */
 export async function handleWebhook(
   payload: WebhookPayload,
-  meta: { competitorId: string; competitorName: string; tier: string; postId?: string }
+  meta: { competitorId: string; competitorName: string; postId?: string }
 ) {
   const apifyToken = process.env.APIFY_TOKEN;
   if (!apifyToken) {
@@ -260,17 +260,18 @@ export async function handleWebhook(
   const runId = crypto.randomUUID();
 
   if (items.length === 0) {
-    if (meta.tier === "T1") {
-      logFlag("T1 competitor returned zero rows -- likely broken handle or deprecated actor", {
-        competitorId: meta.competitorId,
-        competitorName: meta.competitorName,
-        datasetId: payload.resource.defaultDatasetId,
-      });
-    } else {
-      console.log(
-        `${meta.competitorName} (${meta.tier}) returned zero rows -- not flagged (non-T1).`
-      );
-    }
+    // Always flagged now. This used to flag only T1, on the reasoning that
+    // T1 was a weekly full pull where zero rows meant a broken handle, while
+    // other tiers were incremental and zero was routine. Tiers are gone
+    // (migration 020), and the full-pull-vs-incremental distinction never
+    // belonged here anyway -- it lives in lib/harvest.ts, which knows each
+    // competitor's watermark. This path cannot tell, so it reports and lets
+    // a human judge rather than silently swallowing the case.
+    logFlag("Webhook delivery returned zero rows -- check the handle and the actor", {
+      competitorId: meta.competitorId,
+      competitorName: meta.competitorName,
+      datasetId: payload.resource.defaultDatasetId,
+    });
     return;
   }
 

@@ -1,6 +1,7 @@
 import { getSupabaseServerClient } from "@/lib/supabase";
 import { Badge } from "@/components/Badge";
 import { formatNumber, formatVpf, formatScore, formatDate } from "@/lib/format";
+import { categoryLabel } from "@/lib/categories";
 
 export const dynamic = "force-dynamic";
 
@@ -32,8 +33,8 @@ export default async function OutliersPage() {
       ? supabase.from("competitor_posts").select("post_id, post_url, caption").in("post_id", postIds)
       : Promise.resolve({ data: [] as { post_id: string; post_url: string | null; caption: string | null }[] }),
     competitorIds.length > 0
-      ? supabase.from("competitors").select("competitor_id, name, market, tier").in("competitor_id", competitorIds)
-      : Promise.resolve({ data: [] as { competitor_id: string; name: string; market: string; tier: string }[] }),
+      ? supabase.from("competitors").select("competitor_id, name, market, category").in("competitor_id", competitorIds)
+      : Promise.resolve({ data: [] as { competitor_id: string; name: string; market: string; category: string | null }[] }),
     // v_outliers already excludes any post with a transcript (see its own
     // `not exists (select 1 from competitor_transcripts...)` clause), so
     // this will structurally always come back empty for rows that ever
@@ -80,7 +81,7 @@ export default async function OutliersPage() {
                 <tr key={row.post_id} className="border-b border-border last:border-b-0 hover:bg-surface-hover">
                   <td className="px-2 py-1.5">
                     <span className="font-medium text-text">{competitor?.name ?? "—"}</span>
-                    <div className="text-faint">{competitor?.market} / {competitor?.tier}</div>
+                    <div className="text-faint">{competitor?.market} / {categoryLabel(competitor?.category)}</div>
                   </td>
                   <td className="max-w-72 truncate px-2 py-1.5 text-dim">{post?.caption ?? "—"}</td>
                   <td className="px-2 py-1.5">{formatDate(row.posted_at)}</td>

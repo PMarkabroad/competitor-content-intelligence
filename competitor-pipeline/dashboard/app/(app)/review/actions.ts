@@ -7,11 +7,11 @@ import { APPROVED_COUNT_COOKIE } from "@/lib/constants";
 
 export async function approveCandidate(formData: FormData) {
   const candidateId = String(formData.get("candidate_id") ?? "");
-  const proposedTier = String(formData.get("proposed_tier") ?? "");
+  const proposedCategory = String(formData.get("proposed_category") ?? "");
   const market = String(formData.get("market") ?? "");
   const reviewedBy = String(formData.get("reviewed_by") ?? "").trim();
-  if (!candidateId || !proposedTier || !market || !reviewedBy) {
-    throw new Error("candidate_id, proposed_tier, market and your name are required to approve.");
+  if (!candidateId || !proposedCategory || !market || !reviewedBy) {
+    throw new Error("candidate_id, proposed_category, market and your name are required to approve.");
   }
 
   const supabase = getSupabaseServerClient();
@@ -34,7 +34,7 @@ export async function approveCandidate(formData: FormData) {
 
   const { error: insertError } = await supabase.from("competitors").insert({
     name: candidate.display_name || candidate.handle,
-    tier: proposedTier,
+    category: proposedCategory,
     market,
     platform: candidate.platform,
     handle: candidate.handle,
@@ -52,7 +52,7 @@ export async function approveCandidate(formData: FormData) {
     .update({
       reviewed_by: reviewedBy,
       reviewed_at: new Date().toISOString(),
-      proposed_tier: proposedTier,
+      proposed_category: proposedCategory,
       promoted: true,
     })
     .eq("candidate_id", candidateId);

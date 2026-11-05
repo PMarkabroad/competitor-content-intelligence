@@ -6,6 +6,7 @@ import { LineChart } from "@/components/LineChart";
 import { SortablePostsTable, type PostRow } from "@/components/SortablePostsTable";
 import { formatNumber, formatVpf, formatDate, formatChange } from "@/lib/format";
 import { resolveBand } from "@/lib/bands";
+import { categoryLabel } from "@/lib/categories";
 
 export const dynamic = "force-dynamic";
 
@@ -84,7 +85,7 @@ export default async function CompetitorDetailPage({
           {competitor.name} <span className="font-normal text-dim">@{competitor.handle}</span>
         </h1>
         <div className="mt-1 flex flex-wrap items-center gap-2 text-xs">
-          <Badge tone="brand">{competitor.tier}</Badge>
+          <Badge tone="brand">{categoryLabel(competitor.category)}</Badge>
           <Badge tone="neutral">{competitor.market}</Badge>
           <Badge tone="neutral">{competitor.platform}</Badge>
           <Badge tone={competitor.active ? "good" : "neutral"}>{competitor.active ? "active" : "inactive"}</Badge>

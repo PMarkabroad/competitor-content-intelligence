@@ -2,8 +2,8 @@
 
 import { useEffect, useState } from "react";
 import { REVIEWER_NAME_KEY } from "./ReviewerName";
+import { CATEGORIES, categoryLabel } from "@/lib/categories";
 
-const TIERS = ["T1", "T2", "T3"];
 const MARKETS = ["AU", "US", "CA"];
 
 export function RowActions({
@@ -36,9 +36,9 @@ export function RowActions({
       <form action={approveAction} className="flex flex-col gap-1">
         <input type="hidden" name="candidate_id" value={candidateId} />
         <input type="hidden" name="reviewed_by" value={reviewerName} />
-        <select name="proposed_tier" defaultValue="T2" className="rounded-md border border-border bg-bg px-1 py-0.5 text-[11px] text-text">
-          {TIERS.map((t) => (
-            <option key={t} value={t}>{t}</option>
+        <select name="proposed_category" defaultValue="niche_competitor" className="rounded-md border border-border bg-bg px-1 py-0.5 text-[11px] text-text">
+          {CATEGORIES.map((c) => (
+            <option key={c} value={c}>{categoryLabel(c)}</option>
           ))}
         </select>
         <select name="market" defaultValue={defaultMarket} className="rounded-md border border-border bg-bg px-1 py-0.5 text-[11px] text-text">

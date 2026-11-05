@@ -2,6 +2,7 @@ import { getSupabaseServerClient } from "@/lib/supabase";
 import { Badge } from "@/components/Badge";
 import { formatNumber, formatScore, formatDate } from "@/lib/format";
 import { MIN_CAROUSELS_FOR_BASELINE, thinBaseline } from "@/lib/carousels";
+import { categoryLabel } from "@/lib/categories";
 
 export const dynamic = "force-dynamic";
 
@@ -50,10 +51,10 @@ export default async function CarouselsPage() {
     competitorIds.length > 0
       ? supabase
           .from("competitors")
-          .select("competitor_id, name, market, tier, category")
+          .select("competitor_id, name, market, category")
           .in("competitor_id", competitorIds)
       : Promise.resolve({
-          data: [] as { competitor_id: string; name: string; market: string; tier: string; category: string | null }[],
+          data: [] as { competitor_id: string; name: string; market: string; category: string | null }[],
         }),
   ]);
 
@@ -117,7 +118,7 @@ export default async function CarouselsPage() {
                     <td className="px-2 py-1.5">
                       <span className="font-medium text-text">{competitor?.name ?? "—"}</span>
                       <div className="text-faint">
-                        {competitor?.market} / {competitor?.tier}
+                        {competitor?.market} / {categoryLabel(competitor?.category)}
                       </div>
                     </td>
                     <td className="max-w-80 truncate px-2 py-1.5 text-dim">{line}</td>

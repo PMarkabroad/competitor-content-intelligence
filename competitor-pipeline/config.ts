@@ -3,10 +3,11 @@
  * These get retuned against real data -- change them here, not in the SQL
  * views or scripts. If you change OUTLIER_TOP_N_PER_ACCOUNT,
  * OUTLIER_WINDOW_DAYS, OUTLIER_FLOOR_MULTIPLIER, FOLLOWER_BANDS,
- * SCOREABLE_TIERS, BASELINE_WINDOW_DAYS or BASELINE_MIN_POSTS, also update
- * the matching literal in competitor-pipeline/migrations/002_scoring_views.sql,
- * 005_topn_outliers_t1_exempt.sql and 007_follower_band_gates.sql --
- * Postgres views can't reference a TypeScript constant.
+ * BASELINE_WINDOW_DAYS or BASELINE_MIN_POSTS, also update the matching
+ * literal in competitor-pipeline/migrations/002_scoring_views.sql,
+ * 007_follower_band_gates.sql and 020_remove_tiers.sql (which holds the
+ * current definition of every scoring view) -- Postgres views can't
+ * reference a TypeScript constant.
  */
 
 export const config = {
@@ -97,16 +98,6 @@ export const config = {
     { name: "large", maxFollowers: Infinity, minMedianVpf: 0.03 },
   ] as const,
 
-  /**
-   * Tiers eligible for v_competitor_baseline / v_outliers at all (migration
-   * 005). T1 is deliberately excluded: it's a positioning/offer read, a
-   * quarterly human review, not a hook corpus -- and T1 accounts post
-   * monthly-ish, so they'd rarely-to-never clear BASELINE_MIN_POSTS in a
-   * 90-day window anyway (The Self Concept Lab pulled 20 posts and only 4
-   * fell in-window). T2/T3 are the actual hook corpus this system exists
-   * to mine.
-   */
-  SCOREABLE_TIERS: ["T2", "T3"] as const,
 
   /**
    * Discovery pass (migration 008, scripts/discover.ts). TikTok is the
@@ -173,22 +164,36 @@ export const config = {
   /** Minimum posts in the window required to compute a baseline; below this, baseline is null. */
   BASELINE_MIN_POSTS: 5,
 
-  /** Default posts_per_run by tier, used when a competitor row doesn't override it. */
-  POSTS_PER_RUN: {
-    T1: 20,
-    T2: 20,
-    T3: 30,
-  } as const,
+  /**
+   * Default posts_per_run, used when a competitor row doesn't override it.
+   *
+   * Was a map keyed by tier until migration 020 retired tiers. It had not
+   * applied in practice for some time: every row on the roster overrides it
+   * with 60, set during the history backfill. 60 is kept as the default so a
+   * newly promoted account gets the same depth of history as the rest, which
+   * is what its baseline median has to be computed from.
+   *
+   * This is a CEILING, not a cost floor -- an incremental pull only fetches
+   * posts newer than the account's watermark, so a quiet week costs nothing
+   * extra for asking for 60.
+   */
+  DEFAULT_POSTS_PER_RUN: 60,
 
-  /** Scrape cadence by tier, in days -- used by schedule.md and build_run_input.ts watermark logic. */
+  /** Named scrape cadences in days, for competitors.scrape_cadence. */
   SCRAPE_CADENCE_DAYS: {
     weekly: 7,
     fortnightly: 14,
     monthly: 30,
   } as const,
 
-  /** For T3 (format benchmarks), request top-N by views within this trailing window instead of most-recent. */
-  T3_TOP_N_WINDOW_DAYS: 90,
+  /**
+   * Request top-N by views within this trailing window instead of
+   * most-recent. Applied to viral_creator accounts, which are tracked for
+   * format benchmarks rather than for their latest posts -- what matters
+   * there is what worked, not what is newest. (Was keyed to tier T3 until
+   * migration 020; T3 and viral_creator were the same 9 accounts.)
+   */
+  TOP_N_BY_VIEWS_WINDOW_DAYS: 90,
 
   /**
    * Hard monthly Apify spend guard, in USD. build_run_input.ts must refuse

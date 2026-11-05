@@ -1,12 +1,18 @@
 # The whole pipeline on a timer, so Monday opens on new competitor data AND
 # new hooks and posts made from it -- not just fresh rows.
 #
-# Three runs every Sunday, staggered so each starts after the last has
+# Two runs every Sunday, staggered so the second starts after the first has
 # finished:
 #
-#   19:00 UTC  harvest T2   32 TikTok + 6 Instagram
-#   20:00 UTC  harvest T3   19 Instagram
-#   21:00 UTC  content      transcribe -> hooks -> ready-made posts
+#   19:00 UTC  harvest   the whole active roster, one run
+#   21:00 UTC  content   transcribe -> hooks -> ready-made posts
+#
+# It was three runs until migration 020 retired the T1/T2/T3 tiers. The
+# harvest split had stopped meaning anything -- every account was T2 or T3,
+# so the "scoreable tiers" filter excluded nobody, and every row overrode the
+# per-tier posts_per_run default. One run is also kinder to the stage guard:
+# a 9-account run fails its 90% floor the moment one account fails to
+# produce, where a 23-account run tolerates two.
 #
 # Plus a monthly discovery sweep on the 26th, which looks for competitors we
 # do not track yet and stops at a shortlist. It never promotes: passing the
@@ -19,16 +25,13 @@
 # meets a full budget rather than whatever the month left behind.
 #
 # Sunday 21:00 UTC is Monday 07:00 in Melbourne (08:00 under daylight
-# saving), so everything has landed before anyone opens the dashboard.
-#
-# T1 is deliberately absent -- it is exempt from scoring, so an automatic
-# run would spend money producing nothing.
+# saving) and Monday 02:30 IST, so everything has landed before anyone opens
+# the dashboard.
 name: Scheduled harvest
 
 on:
   schedule:
-    - cron: "0 19 * * 0" # T2 harvest
-    - cron: "0 20 * * 0" # T3 harvest
+    - cron: "0 19 * * 0" # harvest, whole roster
     - cron: "0 21 * * 0" # content chain
     - cron: "0 18 26 * *" # monthly discovery sweep
   workflow_dispatch:
@@ -38,7 +41,7 @@ on:
         required: true
         default: "content"
         type: choice
-        options: ["T2", "T3", "content", "discover"]
+        options: ["harvest", "content", "discover"]
 
 # One at a time. Overlapping runs would double-spend against a cap check
 # that cannot see the other run in flight, and the content chain assumes
@@ -78,9 +81,7 @@ jobs:
           if [ -n "${{ inputs.mode }}" ]; then
             echo "value=${{ inputs.mode }}" >> "$GITHUB_OUTPUT"
           elif [ "${{ github.event.schedule }}" = "0 19 * * 0" ]; then
-            echo "value=T2" >> "$GITHUB_OUTPUT"
-          elif [ "${{ github.event.schedule }}" = "0 20 * * 0" ]; then
-            echo "value=T3" >> "$GITHUB_OUTPUT"
+            echo "value=harvest" >> "$GITHUB_OUTPUT"
           elif [ "${{ github.event.schedule }}" = "0 18 26 * *" ]; then
             echo "value=discover" >> "$GITHUB_OUTPUT"
           else
@@ -103,8 +104,8 @@ jobs:
         run: npm run check-actor-builds
 
       - name: Harvest
-        if: steps.mode.outputs.value == 'T2' || steps.mode.outputs.value == 'T3'
-        run: npm run scheduled-harvest -- --tier ${{ steps.mode.outputs.value }}
+        if: steps.mode.outputs.value == 'harvest'
+        run: npm run scheduled-harvest
 
       # --- monthly discovery ---------------------------------------------
       # Five stages, all machine work, stopping before the sixth. Each Apify

@@ -13,7 +13,7 @@ export const DATA_TABLES: TableConfig[] = [
   {
     name: "competitors",
     columns: [
-      "competitor_id", "name", "tier", "market", "platform", "handle", "profile_url",
+      "competitor_id", "name", "category", "market", "platform", "handle", "profile_url",
       "niche_match", "scrape_cadence", "posts_per_run", "transcripts_enabled",
       "handle_verified", "active", "last_scraped_at", "notes", "created_at", "updated_at",
     ],
@@ -25,7 +25,7 @@ export const DATA_TABLES: TableConfig[] = [
       "candidate_id", "platform", "handle", "profile_url", "display_name", "bio", "followers",
       "market_guess", "found_via", "found_at", "video_posts_90d", "median_vpf_90d",
       "last_post_at", "is_private", "band", "gate_result", "gate_fail_reason",
-      "relevance_score", "topic_slugs", "proposed_tier", "reviewed_by", "reviewed_at",
+      "relevance_score", "topic_slugs", "proposed_category", "reviewed_by", "reviewed_at",
       "promoted", "classification", "classification_reason",
     ],
     defaultSort: "found_at",
