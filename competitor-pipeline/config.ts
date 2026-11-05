@@ -339,7 +339,18 @@ export const config = {
    */
   ESTIMATED_COST_PER_PROFILE_USD: 0.0023,
   ESTIMATED_COST_PER_POST_USD: 0.0023,
-  ESTIMATED_COST_PER_TRANSCRIPT_USD: 0.044,
+  /**
+   * MEASURED, not assumed, on 2026-11-05: a 58-reel Instagram run billed
+   * $3.2643 for 56 transcripts and 2 empties -- $0.0583 per transcript.
+   *
+   * The previous 0.044 was treated as an upper bound and is not one. This
+   * actor bills PER MINUTE OF AUDIO, so the cost of a run depends on how
+   * long the reels happen to be, and a single figure can only ever be an
+   * average. A 58-reel estimate at 0.044 came in 28% under the real spend.
+   * Budget headroom, not a hard cap, is what makes that survivable -- so
+   * when this number matters, quote it as an average and say so.
+   */
+  ESTIMATED_COST_PER_TRANSCRIPT_USD: 0.058,
 
   /**
    * Dormancy rules for the verification worksheet (scripts/verification_worksheet.ts)

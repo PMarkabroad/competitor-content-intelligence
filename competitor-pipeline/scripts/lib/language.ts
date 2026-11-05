@@ -6,7 +6,9 @@
  * main() as a side effect -- tagging would have printed a purge report
  * every time it ran.
  *
- * ENGLISH, HINDI AND HINGLISH ARE ALL ALLOWED (changed 2026-11-05).
+ * ENGLISH, HINDI, HINGLISH, PUNJABI AND URDU ARE ALL ALLOWED
+ * (2026-11-05; Punjabi and Urdu added the same day, after the first pass
+ * showed what the Hindi-only rule was still throwing away).
  *
  * The roster is mostly Indian creators speaking to Indian students and
  * graduates in Australia, and a large share of that is Hindi or Hinglish
@@ -26,14 +28,25 @@
  * Hinglish; a Korean punchline cannot become an Ark post, and one did reach
  * third place in the hook library before any of this existed.
  *
- * KNOWN CONSEQUENCE: Devanagari is shared by Hindi, Marathi, Nepali and
- * Sanskrit. Allowing the script allows all of them, and no script test can
- * separate them -- that needs real language identification. Judged an
- * acceptable trade: those creators are talking to substantially the same
- * audience. Urdu is NOT allowed, which is the uncomfortable edge of this
- * rule, because Urdu and Hindi are close and some Urdu career content is
- * squarely on Ark's subject. It sits outside "English, Hindi, Hinglish" as
- * written, so it stays out until someone decides otherwise.
+ * KNOWN CONSEQUENCES, stated rather than discovered later. A script is not
+ * a language, and every one of these allowances is wider than its name:
+ *
+ *   Devanagari  also carries Marathi, Nepali and Sanskrit.
+ *   Gurmukhi    is Punjabi as written in India. Punjabi as written in
+ *               Pakistan uses Shahmukhi, which is Arabic script, so it
+ *               arrives through the line below instead.
+ *   ARABIC      is the wide one. Allowing it for Urdu also allows Arabic,
+ *               Persian, Pashto and Sindhi, because they share the script
+ *               and no code-point test can tell them apart. Accepted
+ *               deliberately: spoken Urdu is close enough to Hindi that the
+ *               hook craft transfers, and the roster is South Asian
+ *               creators addressing a South Asian audience in Australia.
+ *               If Arabic or Persian content ever actually appears, this
+ *               needs real language identification, not another range.
+ *
+ * Separating them properly means calling a language-ID model on each
+ * transcript. That is the right fix if this ever misfires; it is not worth
+ * the call today, when the roster is what it is.
  */
 
 /**
@@ -44,16 +57,16 @@
  * non-English hooks while one sat in plain view.
  */
 const ALLOWED_RANGES: [number, number][] = [
-  [0x0900, 0x097f], // Devanagari -- Hindi
+  [0x0900, 0x097f], // Devanagari -- Hindi (also Marathi, Nepali, Sanskrit)
+  [0x0a00, 0x0a7f], // Gurmukhi -- Punjabi
+  [0x0600, 0x06ff], // Arabic script -- Urdu (see the warning in the header)
 ];
 
 /** [start, end] inclusive, scripts Ark cannot publish in. */
 const DISALLOWED_RANGES: [number, number][] = [
   [0x0400, 0x04ff], // Cyrillic
   [0x0590, 0x05ff], // Hebrew
-  [0x0600, 0x06ff], // Arabic, including Urdu
   [0x0980, 0x09ff], // Bengali
-  [0x0a00, 0x0a7f], // Gurmukhi -- Punjabi
   [0x0a80, 0x0aff], // Gujarati
   [0x0b80, 0x0bff], // Tamil
   [0x0c00, 0x0c7f], // Telugu
