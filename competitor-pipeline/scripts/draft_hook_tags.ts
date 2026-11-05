@@ -42,6 +42,7 @@ import { readFileSync } from "node:fs";
 import { getSupabaseClient } from "./lib/supabaseClient.ts";
 import { recordStage, canRunStage } from "./lib/stage_check.ts";
 import { nonEnglishReason } from "./lib/language.ts";
+import { assertApiCredit } from "./lib/api_credit.ts";
 
 const VOICE_DOC_PATH = new URL("../reference/arkabroad-voice.md", import.meta.url);
 const BUSINESS_DEF_PATH = new URL("../reference/business-definition.md", import.meta.url);
@@ -304,6 +305,9 @@ async function main() {
 
   const anthropicApiKey = process.env.ANTHROPIC_API_KEY;
   if (!anthropicApiKey) throw new Error("ANTHROPIC_API_KEY must be set.");
+  // Tagging is the longest model-bound stage in a Sunday run; finding out
+  // at batch 12 of 30 is finding out too late.
+  await assertApiCredit(anthropicApiKey, "hook tagging");
 
   const supabase = getSupabaseClient();
   const voiceDoc = readFileSync(VOICE_DOC_PATH, "utf-8");

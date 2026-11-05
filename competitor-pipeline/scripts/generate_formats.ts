@@ -27,6 +27,7 @@ import "dotenv/config";
 import { readFileSync } from "node:fs";
 import { getSupabaseClient } from "./lib/supabaseClient.ts";
 import { recordStage, canRunStage } from "./lib/stage_check.ts";
+import { assertApiCredit } from "./lib/api_credit.ts";
 
 const VOICE_DOC_PATH = new URL("../reference/arkabroad-voice.md", import.meta.url);
 const BUSINESS_DEF_PATH = new URL("../reference/business-definition.md", import.meta.url);
@@ -165,6 +166,9 @@ async function main() {
 
   const apiKey = process.env.ANTHROPIC_API_KEY;
   if (!apiKey) throw new Error("ANTHROPIC_API_KEY must be set.");
+  // Before any draft is rendered. This step chains straight off draft
+  // generation, so without its own check it would fail once per draft.
+  await assertApiCredit(apiKey, "format rendering");
 
   const supabase = getSupabaseClient();
   const voiceDoc = readFileSync(VOICE_DOC_PATH, "utf-8");
@@ -208,7 +212,7 @@ async function main() {
     recordStage({ stage: "channel_formats", expected: 0, actual: 0, detail: "every live draft already expanded" });
     return;
   }
-  console.log(`${batch.length} draft(s) to expand -- 2 carousels + 2 rotating formats each (50% carousel).` + String.fromCharCode(10));
+  console.log(`${batch.length} draft(s) to render -- one format each, alternating reel and carousel.` + String.fromCharCode(10));
 
   const { default: Anthropic } = await import("@anthropic-ai/sdk");
   const anthropic = new Anthropic({ apiKey });

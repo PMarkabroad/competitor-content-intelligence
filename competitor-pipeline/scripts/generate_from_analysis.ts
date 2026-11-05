@@ -33,6 +33,7 @@ import { getSupabaseClient } from "./lib/supabaseClient.ts";
 import { isOffBusinessSubject, subjectScope } from "./lib/subject_scope.ts";
 import { recordStage, canRunStage, stageWrote } from "./lib/stage_check.ts";
 import { withRetry, isTransient } from "./lib/retry.ts";
+import { assertApiCredit } from "./lib/api_credit.ts";
 
 const BUSINESS_DEF_PATH = new URL("../reference/business-definition.md", import.meta.url);
 const SKILL_DIR = new URL("../reference/arkabroad-voice-skill/", import.meta.url);
@@ -126,6 +127,8 @@ async function main() {
 
   const apiKey = process.env.ANTHROPIC_API_KEY;
   if (!apiKey) throw new Error("ANTHROPIC_API_KEY must be set.");
+  // Before any batch, not after four of them fail. See lib/api_credit.ts.
+  await assertApiCredit(apiKey, "draft generation");
 
   const supabase = getSupabaseClient();
   const { data, error } = await supabase
