@@ -1,16 +1,20 @@
 /**
- * Turns each ready-made post into per-channel versions.
+ * Renders each ready-made post into its publishable Instagram format.
  *
- * generated_drafts holds one script and one caption, which is a reel and
- * nothing else. Publishing the same idea as a LinkedIn post, a carousel, a
- * story or a tweet meant rewriting it by hand every time -- exactly the work
- * this pipeline exists to remove.
+ * generated_drafts holds one script and one caption. This turns that into
+ * either a reel caption or a carousel -- one format per draft, alternating,
+ * so a run of 50 drafts produces 25 of each.
  *
- * The character limits below are each platform's HARD CEILING, not a target.
- * Facebook's 63,206 is a technical maximum nobody should ever write to, so
- * every format also carries a `target` -- the length that actually reads
- * well there -- and the model is aimed at that. char_limit only exists to
- * catch a violation; the DB rejects an over-limit row outright.
+ * It used to produce ten versions of every draft across Instagram, LinkedIn,
+ * Facebook and X. Ark publishes on Instagram; the rest were generated,
+ * stored, shown on a page and never used. Narrowing to what ships is not
+ * less output -- the same budget now buys more Instagram posts instead of
+ * the same idea restated for channels Ark is not on.
+ *
+ * The character limit is Instagram's HARD CEILING, not a target, so each
+ * format also carries a `target` -- the length that actually reads well --
+ * and the model is aimed at that. char_limit only exists to catch a
+ * violation; the DB rejects an over-limit row outright.
  *
  * Model is claude-sonnet-5, not opus: this is re-expressing an angle that
  * has already been decided, not deciding it. generate_from_analysis does the
@@ -28,42 +32,36 @@ const VOICE_DOC_PATH = new URL("../reference/arkabroad-voice.md", import.meta.ur
 const BUSINESS_DEF_PATH = new URL("../reference/business-definition.md", import.meta.url);
 
 interface FormatSpec {
-  platform: "instagram" | "linkedin" | "facebook" | "twitter";
-  format: string;
+  platform: "instagram";
+  format: "reel" | "carousel";
   label: string;
   charLimit: number | null;
   target: string;
   brief: string;
 }
 
+/**
+ * The only two formats ready-made posts are produced in.
+ *
+ * There used to be ten, across Instagram, LinkedIn, Facebook and X. Every
+ * draft cost a model call for each of them, and the output for the three
+ * other platforms was stored, shown on a page, and not used -- Ark publishes
+ * on Instagram. Narrowing to what ships is not a reduction in output: the
+ * same budget now buys MORE Instagram posts rather than the same idea
+ * restated for channels Ark is not on.
+ *
+ * single_image, story and carousel_story went with them. The first two were
+ * never really posts. carousel_story was a real format and half the carousel
+ * mix, but a story carousel and a framework carousel built from one idea
+ * were the one place this generator reliably produced two pieces that read
+ * as the same post twice.
+ *
+ * migrations/023_instagram_only_formats.sql holds the CHECK constraints that
+ * stop any of this returning by accident -- a stale prompt or a hand-written
+ * insert now fails at the database rather than quietly repopulating a
+ * channel Ark does not publish on.
+ */
 const FORMATS: FormatSpec[] = [
-  {
-    platform: "instagram",
-    format: "single_image",
-    label: "Instagram single image",
-    charLimit: 2200,
-    target: "300-700 characters",
-    brief:
-      "Caption for one static image. Only the first ~125 characters show before the More link, so the hook must land inside them. Line breaks between beats.",
-  },
-  {
-    platform: "instagram",
-    format: "carousel",
-    label: "Instagram carousel",
-    charLimit: 2200,
-    target: "600-1200 characters",
-    brief:
-      "FRAMEWORK carousel. Write the slides, then the caption. Format as SLIDE 1: through SLIDE 6: (5-8 slides), each slide one idea in under 15 words, then a blank line and CAPTION: with the supporting text. Slide 1 is the hook; the last slide is the ask. Numbered, structural, one step or one rule per slide.",
-  },
-  {
-    platform: "instagram",
-    format: "carousel_story",
-    label: "Instagram carousel (story)",
-    charLimit: 2200,
-    target: "600-1200 characters",
-    brief:
-      "STORY carousel -- a different post from the framework one, not a rewording of it. Same source idea told as a sequence of beats: SLIDE 1 opens mid-scene or on the moment things went wrong, each following slide is the next thing that happened, the turn comes two-thirds through, and the last slide lands the point plus the ask. Format as SLIDE 1: through the last slide (6-9 slides), each under 20 words, then a blank line and CAPTION:. No numbered lists, no headings -- it reads like someone telling you what happened.",
-  },
   {
     platform: "instagram",
     format: "reel",
@@ -75,57 +73,12 @@ const FORMATS: FormatSpec[] = [
   },
   {
     platform: "instagram",
-    format: "story",
-    label: "Instagram story",
-    charLimit: null,
-    target: "3-5 frames, under 20 words each",
+    format: "carousel",
+    label: "Instagram carousel",
+    charLimit: 2200,
+    target: "600-1200 characters",
     brief:
-      "Format as FRAME 1: and so on. Text on screen, not narration. One idea per frame, last frame a poll, question sticker or link prompt. No fixed platform limit, but the text has to fit on a phone screen over an image.",
-  },
-  {
-    platform: "linkedin",
-    format: "post",
-    label: "LinkedIn post",
-    charLimit: 3000,
-    target: "1200-2000 characters",
-    brief:
-      "Long-form is rewarded here. Only the first ~200 characters show before the see-more fold. Professional register -- same substance, none of the Instagram punctuation or emoji. Short paragraphs, plenty of white space, a real point of view, and a closing question a peer could disagree with.",
-  },
-  {
-    platform: "linkedin",
-    format: "carousel_pdf",
-    label: "LinkedIn carousel (PDF)",
-    charLimit: 3000,
-    target: "8-10 slides plus 600-1200 characters of post text",
-    brief:
-      "Format as SLIDE 1: through the last slide, then a blank line and POST TEXT:. Slides carry a headline and one supporting line each. The character limit applies to the POST TEXT accompanying the document.",
-  },
-  {
-    platform: "facebook",
-    format: "facebook_post",
-    label: "Facebook post",
-    charLimit: 63206,
-    target: "400-900 characters",
-    brief:
-      "The 63,206 limit is technical -- never write anywhere near it. Facebook's audience skews older and reads more narrative, so lead with the story beat rather than the framework. Plain paragraphs, no hashtag stacks.",
-  },
-  {
-    platform: "facebook",
-    format: "facebook_carousel",
-    label: "Facebook carousel",
-    charLimit: 63206,
-    target: "3-5 cards plus 300-600 characters of caption",
-    brief:
-      "Format as CARD 1: headline | description per card (headline under 40 characters, description under 20 words), then a blank line and CAPTION:. Cards are read fast in-feed.",
-  },
-  {
-    platform: "twitter",
-    format: "tweet",
-    label: "X / Twitter",
-    charLimit: 270,
-    target: "under 270 characters INCLUDING hashtags",
-    brief:
-      "One tweet. The hardest constraint here -- cut to the single sharpest claim. Include 1-2 relevant hashtags and count them inside the 270. No thread, no thread tease.",
+      "FRAMEWORK carousel. Write the slides, then the caption. Format as SLIDE 1: through SLIDE 6: (5-8 slides), each slide one idea in under 15 words, then a blank line and CAPTION: with the supporting text. Slide 1 is the hook; the last slide is the ask. Numbered, structural, one step or one rule per slide.",
   },
 ];
 
@@ -135,29 +88,19 @@ interface Variant {
 }
 
 /**
- * Which formats each draft gets.
+ * Which single format this draft becomes.
  *
- * The mix used to be a flat one-of-each, which made Instagram carousel 11%
- * of everything produced. It was raised to 40% on 2026-09-16 and to 50%
- * the same day. Two carousels per draft plus two other formats is exactly
- * that: 2 of 4.
+ * One format per draft, alternating, so a run of 50 drafts produces 25 reels
+ * and 25 carousels. The unit of output is now a POST, not a draft expanded
+ * into a set of channel versions -- 50 posts means 50 distinct ideas, each
+ * rendered once, rather than 25 ideas rendered twice.
  *
- * Every draft gets both carousels. The other eight formats rotate in fixed
- * pairs, so over any four consecutive drafts each of them appears exactly
- * once, and which pair a given draft carries is predictable rather than
- * random. Change the ratio here, not in the loop.
+ * Keyed on the draft's position in the whole live set rather than in this
+ * batch, so re-running on a few stragglers does not restart the alternation
+ * and hand every one of them the same format.
  */
-const ALWAYS = ["carousel", "carousel_story"];
-const ROTATION: string[][] = [
-  ["reel", "post"],
-  ["tweet", "single_image"],
-  ["facebook_post", "carousel_pdf"],
-  ["story", "facebook_carousel"],
-];
-
 function formatsFor(index: number): FormatSpec[] {
-  const keys = [...ALWAYS, ...ROTATION[index % ROTATION.length]];
-  return FORMATS.filter((f) => keys.includes(f.format));
+  return [FORMATS[index % FORMATS.length]];
 }
 
 function arg(name: string): string | null {
@@ -236,23 +179,22 @@ async function main() {
     .order("created_at", { ascending: false });
   if (error) throw new Error(`Failed to read drafts: ${error.message}`);
 
-  // A draft counts as done once it has the story carousel -- the format
-  // that did not exist before the carousel-heavy mix. Keying on that, rather than on
-  // "any row at all", lets this same script top up drafts written under
-  // the old one-of-each mix without regenerating everything.
-  // Every (draft, format) pair that already exists. A draft is only asked
-  // for the formats it is missing: the first backfill regenerated four
-  // existing pieces per draft to add one new carousel, which was 80% wasted
-  // work and an hour instead of twelve minutes.
+  // Every (draft, format) pair that already exists, so a draft is only asked
+  // for what it is missing. An early backfill regenerated four existing
+  // pieces per draft to add one new carousel -- 80% wasted work, and an hour
+  // instead of twelve minutes.
   const { data: existing } = await supabase.from("draft_formats").select("draft_id, format");
   const have = new Map<string, Set<string>>();
   for (const r of existing ?? []) {
     if (!have.has(r.draft_id)) have.set(r.draft_id, new Set());
     have.get(r.draft_id)!.add(r.format);
   }
-  // A draft counts as done once it has the story carousel -- the format
-  // that did not exist before the carousel-heavy mix.
-  const haveFormats = new Set([...have.entries()].filter(([, f]) => f.has("carousel_story")).map(([id]) => id));
+  // A draft is done once it has ANY format row. It used to be keyed on
+  // carousel_story specifically, as the newest format, so that drafts
+  // written under an older mix would be topped up -- carousel_story no
+  // longer exists, and with one format per draft "has a row" is exactly the
+  // right question again.
+  const haveFormats = new Set([...have.entries()].filter(([, f]) => f.size > 0).map(([id]) => id));
 
   const todo = (drafts ?? []).filter((d) => regenerate || !haveFormats.has(d.draft_id));
   const batch = limit ? todo.slice(0, limit) : todo;
@@ -281,19 +223,19 @@ ${businessDef}
 
 ---
 
-You are given ONE post that has already been written and approved: its hook, its script and its caption. The angle is decided. Your job is NOT to invent a new idea -- it is to express THIS idea properly on each channel.
+You are given ONE post that has already been written and approved: its hook, its script and its caption. The angle is decided. Your job is NOT to invent a new idea -- it is to render THIS idea properly in the format asked for.
 
 Rules:
-- Every version says the same thing. Same claim, same mechanism, same proof. Only the shape and the register change.
+- The version says the same thing as the source. Same claim, same mechanism, same proof. Only the shape changes.
 - Never invent a fact that is not in the source post. No new numbers, no new employers, no new prices, no new job postings -- not even as illustration.
 - Write for a reader IN AUSTRALIA who already holds Australian work rights.
-- Match each channel's register. A LinkedIn post is not an Instagram caption with the emoji stripped out; it is written for a peer who might argue back.
-- Respect the target length given for each format. The character LIMIT is a hard ceiling you must never exceed; the TARGET is what you actually aim for.
-- Where a format asks for SLIDE, FRAME or CARD structure, follow that structure exactly.
+- Instagram register throughout. This is the only channel Ark publishes on.
+- Respect the target length. The character LIMIT is a hard ceiling you must never exceed; the TARGET is what you actually aim for.
+- Where the format asks for SLIDE structure, follow that structure exactly.
 
 Output ONLY a JSON array, no markdown fences, no preamble:
-[{"format": "<the format key>", "body": "<the full text for that channel>"}]
-One object per format, using exactly the format keys listed under CHANNELS TO WRITE -- no others.`;
+[{"format": "<the format key>", "body": "<the full text>"}]
+One object, using exactly the format key listed under CHANNELS TO WRITE -- no others.`;
 
   let written = 0;
   let failed = 0;

@@ -96,7 +96,10 @@ async function main() {
     return;
   }
 
-  const count = Number(arg("count") ?? 5);
+  // 50 a run: 25 reels + 25 carousels, one format per draft
+  // (scripts/generate_formats.ts). Capped below by how much distinct
+  // evidence actually exists -- see the shortfall check.
+  const requested = Number(arg("count") ?? 50);
   // Posts per API call. Five fits comfortably inside max_tokens alongside
   // adaptive thinking; 25 did not.
   const BATCH_SIZE = 5;
@@ -139,6 +142,50 @@ async function main() {
   );
   if (rows.length === 0) {
     console.log("No usable tagged hooks. Run the tagging pass first.");
+    return;
+  }
+
+  // NEVER PAD. A post has to be built on something, and without a cap the
+  // model will return the requested number by restating the same few
+  // high-scoring gaps in different words. Near-duplicates are worse than a
+  // short run: they look like output, so someone has to read them before
+  // they can be thrown away.
+  //
+  // The supply measure is DISTINCT SUBJECTS, not hooks. Two hooks tagged
+  // with the same sub_topic are two accounts making the same point, which is
+  // excellent evidence that the point works and still only one post. Hooks
+  // with no sub_topic count individually rather than collapsing into one
+  // bucket -- an untagged hook is unknown, not duplicate.
+  //
+  // What this does NOT do is track subjects used by previous runs. The
+  // model is given this run's hooks to avoid, so a single run will not
+  // repeat itself, but two runs a week apart can both reach for the
+  // strongest subject. Fixing that needs the draft to record which hook it
+  // was built on as an ID -- source_caption currently holds the model's own
+  // prose, which cannot be matched back reliably. Worth doing; not silently
+  // faked here with a string compare that would mostly miss.
+  const distinctSubjects = new Set<string>();
+  for (const [i, r] of rows.entries()) {
+    const s = String(r.sub_topic ?? "").trim().toLowerCase();
+    distinctSubjects.add(s || `__untagged_${i}`);
+  }
+  const supply = distinctSubjects.size;
+
+  const count = Math.min(requested, supply);
+  if (count < requested) {
+    console.log(
+      `SHORTFALL: ${requested} post(s) requested, ${supply} distinct subject(s) available ` +
+        `across ${rows.length} usable hook(s).`
+    );
+    console.log(
+      `Generating ${count} rather than padding to ${requested} -- more posts need more evidence, ` +
+        `not more rewording. Harvest more accounts or wait for the next outlier window.
+`
+    );
+  }
+  if (count === 0) {
+    console.log("Nothing new to build on. Not generating.");
+    recordStage({ stage: "drafts", expected: 0, actual: 0, detail: "no unused hooks to build on" });
     return;
   }
 
@@ -358,7 +405,7 @@ Exactly ${BATCH_SIZE} objects. Every object's "market" is "AU" -- Ark serves Aus
   if (!draftsOk) return;
 
   // Channel versions are generated here rather than left as a step someone
-  // has to remember. A draft with no LinkedIn or carousel version still has
+  // has to remember. A draft with no rendered Instagram version still has
   // to be rewritten by hand, which is the work this pipeline exists to
   // remove. Failure is reported, not thrown: the posts are already saved
   // and are useful without their variants.

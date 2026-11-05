@@ -10,31 +10,13 @@ export interface ChannelVersion {
   char_limit: number | null;
 }
 
-// Ordered by how Ark actually publishes, not alphabetically -- Instagram
-// first because it is the primary channel, X last because it is the
-// hardest to fill and the least used.
-const ORDER = [
-  "reel",
-  "carousel",
-  "single_image",
-  "story",
-  "post",
-  "carousel_pdf",
-  "facebook_post",
-  "facebook_carousel",
-  "tweet",
-];
+// Reel first: it is the format with the most posts behind it. Everything
+// else was retired on 2026-11-05 -- see app/(app)/drafts/page.tsx.
+const ORDER = ["reel", "carousel"];
 
 const LABEL: Record<string, string> = {
   reel: "IG Reel",
   carousel: "IG Carousel",
-  single_image: "IG Image",
-  story: "IG Story",
-  post: "LinkedIn",
-  carousel_pdf: "LI Carousel",
-  facebook_post: "Facebook",
-  facebook_carousel: "FB Carousel",
-  tweet: "X",
 };
 
 export function ChannelVersions({ versions }: { versions: ChannelVersion[] }) {

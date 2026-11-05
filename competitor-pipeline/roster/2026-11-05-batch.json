@@ -1,0 +1,38 @@
+{
+  "_comment": "Batch added 2026-11-05 at the user's request. market=AU for all. Handles are verified against Instagram at insert time by scripts/add_competitors.ts; anything that does not resolve or is private lands inactive and flagged rather than silently dropped.",
+  "niche_competitor": [
+    "internash.co",
+    "tamannasingh_yt",
+    "prabh.australia",
+    "growmore.one",
+    "sydney_digi",
+    "noo_worries_mate",
+    "kiratalreja",
+    "kahaniandconversations",
+    "its_perth__",
+    "veerji_in_australia",
+    "sharmasoniya19",
+    "arshdhillongc",
+    "puremelbournevibes",
+    "ramanwadalaofficial",
+    "shivani_mel",
+    "aditiinau",
+    "wander_horizons",
+    "sanzitup",
+    "heeeeerrrrrrrr",
+    "priyankaasaluja",
+    "mahekjjj",
+    "careerwithfaazil",
+    "abroadwithrohini",
+    "allaboutminakshi",
+    "heyshrutimishra",
+    "savorwithsayu",
+    "disha_mohindru",
+    "ismail_australia"
+  ],
+  "viral_creator": [
+    "vaniikaim",
+    "paaras_maan",
+    "isha.in.mel"
+  ]
+}

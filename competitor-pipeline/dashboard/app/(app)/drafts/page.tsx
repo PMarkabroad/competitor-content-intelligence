@@ -38,37 +38,19 @@ interface FormatTab {
 
 const keysOf = (f: FormatTab) => f.keys ?? [f.key];
 
+// Instagram only, two formats. LinkedIn, Facebook and X were removed on
+// 2026-11-05 -- Ark publishes on Instagram, and a version for a channel
+// nobody posts to is a filter nobody picks. Their existing rows were copied
+// into archive.draft_formats_retired_2026_11_05 before being deleted; the
+// CHECK constraints in migration 023 stop them coming back.
 const PLATFORM_GROUPS: { platform: string; label: string; formats: FormatTab[] }[] = [
   {
     platform: "instagram",
     label: "Instagram",
     formats: [
       { key: "reel", label: "Reel", limit: 2200 },
-      { key: "carousel", label: "Carousel", limit: 2200, keys: ["carousel", "carousel_story"] },
-      { key: "single_image", label: "Image", limit: 2200 },
-      { key: "story", label: "Story", limit: null },
+      { key: "carousel", label: "Carousel", limit: 2200 },
     ],
-  },
-  {
-    platform: "linkedin",
-    label: "LinkedIn",
-    formats: [
-      { key: "post", label: "Post", limit: 3000 },
-      { key: "carousel_pdf", label: "Carousel", limit: 3000 },
-    ],
-  },
-  {
-    platform: "facebook",
-    label: "Facebook",
-    formats: [
-      { key: "facebook_post", label: "Post", limit: 63206 },
-      { key: "facebook_carousel", label: "Carousel", limit: 63206 },
-    ],
-  },
-  {
-    platform: "twitter",
-    label: "X",
-    formats: [{ key: "tweet", label: "Tweet", limit: 270 }],
   },
 ];
 
@@ -76,15 +58,7 @@ const ALL_FORMATS = PLATFORM_GROUPS.flatMap((g) => g.formats);
 
 const FORMAT_LABEL: Record<string, string> = {
   reel: "Reel captions",
-  carousel: "Carousels (framework)",
-  carousel_story: "Carousels (story)",
-  single_image: "Single image",
-  story: "Stories",
-  post: "Posts",
-  carousel_pdf: "Carousels (PDF)",
-  facebook_post: "Posts",
-  facebook_carousel: "Carousels",
-  tweet: "Tweets",
+  carousel: "Carousels",
 };
 
 // Order within a platform: the format used most often first.
@@ -276,9 +250,6 @@ export default async function DraftsPage({
 
 const PLATFORM_LABEL: Record<string, string> = {
   instagram: "Instagram",
-  linkedin: "LinkedIn",
-  facebook: "Facebook",
-  twitter: "X",
 };
 
 /**
@@ -292,7 +263,7 @@ function ChannelLinks({ platforms }: { platforms: Set<string> }) {
   return (
     <div className="mt-3 flex flex-wrap items-center gap-1.5 border-t border-border pt-2.5">
       <span className="text-[10px] text-faint">Written for</span>
-      {["instagram", "linkedin", "facebook", "twitter"]
+      {["instagram"]
         .filter((p) => platforms.has(p))
         .map((p) => (
           <Link
