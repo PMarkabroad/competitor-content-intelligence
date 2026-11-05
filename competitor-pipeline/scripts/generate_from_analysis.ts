@@ -32,6 +32,7 @@ import { fileURLToPath } from "node:url";
 import { getSupabaseClient } from "./lib/supabaseClient.ts";
 import { isOffBusinessSubject, subjectScope } from "./lib/subject_scope.ts";
 import { recordStage, canRunStage, stageWrote } from "./lib/stage_check.ts";
+import { withRetry, isTransient } from "./lib/retry.ts";
 
 const BUSINESS_DEF_PATH = new URL("../reference/business-definition.md", import.meta.url);
 const SKILL_DIR = new URL("../reference/arkabroad-voice-skill/", import.meta.url);
@@ -145,6 +146,18 @@ async function main() {
     return;
   }
 
+  // Which run this is. Defaults to today's date, so re-running after a crash
+  // resumes the same run rather than starting a second one. --run pins it
+  // explicitly when two separate batches are wanted on one day.
+  const runLabel = arg("run") ?? new Date().toISOString().slice(0, 10);
+  const { data: alreadyRows, error: alreadyErr } = await supabase
+    .from("generated_drafts")
+    .select("hook, source_caption")
+    .eq("run_label", runLabel)
+    .neq("status", "dismissed");
+  if (alreadyErr) throw new Error(`Could not read this run's existing drafts: ${alreadyErr.message}`);
+  const already = alreadyRows ?? [];
+
   // NEVER PAD. A post has to be built on something, and without a cap the
   // model will return the requested number by restating the same few
   // high-scoring gaps in different words. Near-duplicates are worse than a
@@ -171,8 +184,19 @@ async function main() {
   }
   const supply = distinctSubjects.size;
 
-  const count = Math.min(requested, supply);
-  if (count < requested) {
+  // "Ensure `requested` posts exist for this run", not "write `requested`
+  // more". Without this, re-running after a crash at batch 7 of 10 would add
+  // 50 on top of the 35 already saved and near-duplicate the lot.
+  const target = Math.max(0, requested - already.length);
+  if (already.length > 0) {
+    console.log(
+      `Run ${runLabel} already has ${already.length} draft(s). Topping up to ${requested}: ` +
+        `${target} to write.\n`
+    );
+  }
+
+  const count = Math.min(target, supply);
+  if (count < target) {
     console.log(
       `SHORTFALL: ${requested} post(s) requested, ${supply} distinct subject(s) available ` +
         `across ${rows.length} usable hook(s).`
@@ -184,8 +208,12 @@ async function main() {
     );
   }
   if (count === 0) {
-    console.log("Nothing new to build on. Not generating.");
-    recordStage({ stage: "drafts", expected: 0, actual: 0, detail: "no unused hooks to build on" });
+    const why =
+      target === 0
+        ? `run ${runLabel} already has its ${requested} draft(s)`
+        : "no unused hooks to build on";
+    console.log(`Nothing to generate: ${why}.`);
+    recordStage({ stage: "drafts", expected: 0, actual: 0, detail: why });
     return;
   }
 
@@ -322,6 +350,8 @@ Exactly ${BATCH_SIZE} objects. Every object's "market" is "AU" -- Ark serves Aus
   // posts instead of the whole run.
   type Post = { market: string; built_on: string; hook: string; script: string; caption: string };
   const posts: Post[] = [];
+  let saved = 0;
+  let failedBatches = 0;
 
   for (let batch = 0; posts.length < count; batch++) {
     const remaining = count - posts.length;
@@ -330,19 +360,41 @@ Exactly ${BATCH_SIZE} objects. Every object's "market" is "AU" -- Ark serves Aus
     // Each batch is a fresh call with no memory of the last one, so without
     // this the model re-derives the same highest-scoring gaps every time and
     // returns near-duplicates.
-    const avoid = posts.length
+    // Seeded from the DATABASE, not just from this process's memory. A
+    // resumed run has to avoid the angles its earlier, crashed attempt
+    // already saved -- those are exactly the ones it would otherwise
+    // re-derive, because they were the highest-scoring gaps to begin with.
+    const writtenHooks = [...already.map((a) => String(a.hook)), ...posts.map((x) => x.hook)];
+    const avoid = writtenHooks.length
       ? "\n\nAlready written -- do NOT repeat these angles or reopen with these lines:\n" +
-        posts.map((x) => `- ${x.hook}`).join("\n")
+        writtenHooks.map((h) => `- ${h}`).join("\n")
       : "";
 
-    const stream = anthropic.messages.stream({
-      model: "claude-opus-5",
-      max_tokens: 16000,
-      thinking: { type: "adaptive" },
-      system: system.replace(`Exactly ${BATCH_SIZE} objects.`, `Exactly ${askFor} objects.`),
-      messages: [{ role: "user", content: evidence + avoid }],
-    });
-    const message = await stream.finalMessage();
+    // The CALL is wrapped, not just the JSON parse below. A 50-post run died
+    // at batch 3 of 10 on a bare ECONNRESET from the API socket: the throw
+    // escaped main() and took batches 1 and 2 with it, because nothing was
+    // saved until every batch had finished. The comment above claimed
+    // batching capped the blast radius -- it only did so for a response that
+    // arrived and failed to parse, never for one that never arrived.
+    let message;
+    try {
+      const stream = anthropic.messages.stream({
+        model: "claude-opus-5",
+        max_tokens: 16000,
+        thinking: { type: "adaptive" },
+        system: system.replace(`Exactly ${BATCH_SIZE} objects.`, `Exactly ${askFor} objects.`),
+        messages: [{ role: "user", content: evidence + avoid }],
+      });
+      message = await stream.finalMessage();
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      failedBatches += 1;
+      console.error(
+        `  batch ${batch + 1}: call failed (${msg.slice(0, 120)})` +
+          `${isTransient(msg) ? " -- transient" : ""}, skipping this batch.`
+      );
+      continue;
+    }
 
     const block = message.content.find((b) => b.type === "text");
     if (!block || block.type !== "text") {
@@ -361,7 +413,32 @@ Exactly ${BATCH_SIZE} objects. Every object's "market" is "AU" -- Ark serves Aus
       );
       continue;
     }
-    posts.push(...parsed);
+    // Saved PER BATCH, not at the end. Holding 50 posts in memory until the
+    // final batch meant any crash threw away everything already generated and
+    // paid for -- which is exactly what happened. The `avoid` list is built
+    // from `posts`, so it still sees everything written this run.
+    for (const q of parsed) {
+      const { error: insErr } = await withRetry("generated_drafts insert", () =>
+        supabase.from("generated_drafts").insert({
+          competitor_name: "Cross-competitor analysis",
+          // Always AU. The column stays because older rows carry other values.
+          market: "AU",
+          source_post_id: null,
+          source_caption: `Built on: ${q.built_on}`,
+          run_label: runLabel,
+          hook: q.hook,
+          script: q.script,
+          caption: q.caption,
+        })
+      );
+      if (insErr) {
+        console.error(`  FAILED to save: ${insErr.message}`);
+        continue;
+      }
+      saved += 1;
+      posts.push(q);
+      console.log(`  [${saved}/${count}] ${q.hook.slice(0, 86)}`);
+    }
     console.log(`  batch ${batch + 1}: ${parsed.length} post(s) (${posts.length}/${count})`);
 
     if (batch >= Math.ceil(count / BATCH_SIZE) + 2) {
@@ -370,28 +447,7 @@ Exactly ${BATCH_SIZE} objects. Every object's "market" is "AU" -- Ark serves Aus
     }
   }
 
-  let saved = 0;
-  for (const p of posts) {
-    const { error: insErr } = await supabase.from("generated_drafts").insert({
-      competitor_name: "Cross-competitor analysis",
-      // Always AU. The column stays because older rows carry other values.
-      market: "AU",
-      source_post_id: null,
-      source_caption: `Built on: ${p.built_on}`,
-      hook: p.hook,
-      script: p.script,
-      caption: p.caption,
-    });
-    if (insErr) {
-      console.error(`  FAILED to save: ${insErr.message}`);
-      continue;
-    }
-    saved++;
-    console.log(`  [${p.market}] ${p.hook.slice(0, 90)}`);
-    console.log(`        built on: ${p.built_on.slice(0, 120)}`);
-  }
-
-  console.log(`\nSaved ${saved} analysis-derived post(s). They're on /drafts.`);
+  console.log(`\nSaved ${saved} analysis-derived post(s)${failedBatches ? `, ${failedBatches} batch(es) failed` : ""}. They're on /drafts.`);
 
   // min_ratio 0.9: an occasional model call failing or a batch coming back
   // unparseable should not kill the run, and the ones that failed are logged
